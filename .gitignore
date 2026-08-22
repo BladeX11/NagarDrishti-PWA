@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Python / Byte-compiled / Environment
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+*.sqlite3
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# Build Outputs
+dist/
+build/
+out/
+.next/
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# IDE & Editor files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+
+# Obsidian local workspace state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache/
