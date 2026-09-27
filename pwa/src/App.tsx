@@ -1,12 +1,14 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useDeviceType } from './hooks/useDeviceType';
-import { DesktopPlaceholder } from './components/DesktopPlaceholder';
 import { BottomNav } from './components/BottomNav';
 import { HomePage } from './pages/HomePage';
 import { ReportIssuePage } from './pages/ReportIssuePage';
 import { MyReportsPage } from './pages/MyReportsPage';
 import { MapPage } from './pages/MapPage';
 import { AlertsPage } from './pages/AlertsPage';
+
+// The desktop dashboard runs on port 3000 (separate Vite app)
+const DASHBOARD_URL = 'http://localhost:3000';
 
 // Hide bottom nav on full-screen flows
 const HIDE_NAV_PATHS = ['/report'];
@@ -36,15 +38,14 @@ function AppShell() {
 export default function App() {
   const device = useDeviceType();
 
-  // ── INTEGRATION SEAM ──────────────────────────────────────────────────────
-  // Desktop path: swap <DesktopPlaceholder /> with <WebApp /> when the
-  // officer/public web UI is ready. The mobile PWA below stays untouched.
-  // ─────────────────────────────────────────────────────────────────────────
+  // Desktop → redirect to the main officer/public dashboard app
   if (device === 'desktop') {
-    return <DesktopPlaceholder />;
+    window.location.replace(DASHBOARD_URL);
+    // Show nothing while the redirect happens
+    return null;
   }
 
-  // Mobile / tablet → full citizen PWA
+  // Mobile / tablet → citizen PWA
   return (
     <BrowserRouter>
       <AppShell />
