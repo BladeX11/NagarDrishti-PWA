@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle2, Clock, Users, ChevronRight, RefreshCw } from 'lucide-react';
 import { AppBar } from '../components/AppBar';
 import { StatusBadge } from '../components/StatusBadge';
@@ -81,7 +81,41 @@ function statusIconColor(status: IssueStatus): string {
 
 export function MyReportsPage() {
   const [view, setView] = useState<ViewMode>('reported');
-  const [expandedId, setExpandedId] = useState<string | null>(MY_REPORTS[0].id);
+  const [issues, setIssues] = useState<(Issue & { timeline: TimelineEvent[]; can_verify?: boolean })[]>(MY_REPORTS);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/issues')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data && data.data.items && data.data.items.length > 0) {
+          const mapped = data.data.items.map((apiIssue: any) => ({
+            id: apiIssue.id,
+            public_id: apiIssue.publicRef,
+            category_key: apiIssue.category,
+            department: { id: apiIssue.departmentId || 'd', name: apiIssue.departmentId || 'Department' },
+            ward: { id: apiIssue.wardId || 'w', code: 'W', name: apiIssue.wardId || 'Ward' },
+            status: apiIssue.status.toLowerCase().replace(' ', '_'),
+            urgency: { tier: apiIssue.priority, source: 'system', explanation: apiIssue.urgencyExplanation || '' },
+            supporter_count: apiIssue.supporterCount || 0,
+            submitted_at: apiIssue.createdAt,
+            age_days: apiIssue.ageInDays,
+            location: { type: 'coarsened_point', coordinates: [apiIssue.longitude || 0, apiIssue.latitude || 0], h3_cell: 'demo' },
+            analysis_state: 'completed',
+            description_redacted: apiIssue.description || apiIssue.title,
+            timeline: [], // Would fetch timeline per issue from /api/issues/:id/timeline ideally
+          }));
+          setIssues(mapped);
+          if (mapped.length > 0) setExpandedId(mapped[0].id);
+        } else {
+          setExpandedId(MY_REPORTS[0].id);
+        }
+      })
+      .catch(err => {
+        console.error(err);
+        setExpandedId(MY_REPORTS[0].id);
+      });
+  }, []);
 
   return (
     <div className="page">
@@ -108,7 +142,7 @@ export function MyReportsPage() {
               marginBottom: -2,
             }}
           >
-            {v === 'reported' ? `My Reports (${MY_REPORTS.length})` : 'Supported (2)'}
+            {v === 'reported' ? `My Reports (${issues.length})` : 'Supported (2)'}
           </button>
         ))}
       </div>
@@ -120,7 +154,7 @@ export function MyReportsPage() {
 
       <div style={{ padding: '8px 16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {view === 'reported' ? (
-          MY_REPORTS.map((report, i) => {
+          issues.map((report, i) => {
             const meta = CATEGORY_META[report.category_key];
             const isExpanded = expandedId === report.id;
 

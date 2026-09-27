@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Activity, AlertTriangle, ArrowRight, Check, ChevronDown, Clock3, Database, FileCheck2, Fingerprint, Gauge, Layers3, Search, ShieldCheck, Sparkles, Target, X } from 'lucide-react';
 import { duplicatePairs, issues as seedIssues, ledgerEvents, predictions, weeklyMetrics } from '../../data/seed';
+import { researchApi, type ModelPrediction, type DuplicateCandidate } from '../../lib/api';
 import { categories } from '../../types';
 import type { Category, Prediction } from '../../types';
 import { Button } from '../../components/shared/Button';

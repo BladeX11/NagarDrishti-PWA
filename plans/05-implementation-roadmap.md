@@ -46,13 +46,13 @@ _Estimated effort: 2-3 sessions_
 | 1.1 | Get PostgreSQL running (Docker or local) | `nagardrishti-frontend/.env`, `docker-compose.yml` | NOT DONE |
 | 1.2 | Run Drizzle migrations + seed data | `server/db/seed.ts`, `drizzle.config.ts` | NOT DONE |
 | 1.3 | Start backend, verify API responds | `server/index.ts` | NOT DONE |
-| 1.4 | Create centralized API client for frontend | New: `client/src/lib/api.ts` | NOT DONE |
-| 1.5 | Wire CitizenPages to POST /api/issues | `client/src/pages/citizen/CitizenPages.tsx` | NOT DONE |
-| 1.6 | Wire OfficerPages to GET /api/issues + status updates | `client/src/pages/officer/OfficerPages.tsx` | NOT DONE |
-| 1.7 | Wire PublicPages to GET /api/map, /api/scorecards | `client/src/pages/transparency/PublicPages.tsx` | NOT DONE |
-| 1.8 | Wire ResearchPages to research endpoints | `client/src/pages/research/ResearchPages.tsx` | NOT DONE |
-| 1.9 | Wire PWA ReportIssuePage to POST /api/issues | `pwa/src/pages/ReportIssuePage.tsx` | NOT DONE |
-| 1.10 | Wire PWA HomePage + MyReportsPage to API | `pwa/src/pages/HomePage.tsx`, `MyReportsPage.tsx` | NOT DONE |
+| 1.4 | Create centralized API client for frontend | New: `client/src/lib/api.ts` | DONE |
+| 1.5 | Wire CitizenPages to POST /api/issues | `client/src/pages/citizen/CitizenPages.tsx` | DONE |
+| 1.6 | Wire OfficerPages to GET /api/issues + status updates | `client/src/pages/officer/OfficerPages.tsx` | DONE |
+| 1.7 | Wire PublicPages to GET /api/map, /api/scorecards | `client/src/pages/transparency/PublicPages.tsx` | DONE |
+| 1.8 | Wire ResearchPages to research endpoints | `client/src/pages/research/ResearchPages.tsx` | DONE |
+| 1.9 | Wire PWA ReportIssuePage to POST /api/issues | `pwa/src/pages/ReportIssuePage.tsx` | DONE |
+| 1.10 | Wire PWA HomePage + MyReportsPage to API | `pwa/src/pages/HomePage.tsx`, `MyReportsPage.tsx` | DONE |
 
 ### Done When
 - [ ] Create an issue in PWA -> it appears in officer dashboard

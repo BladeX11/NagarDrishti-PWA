@@ -39,13 +39,33 @@ export function ReportIssuePage() {
     setTimeout(() => setAiSuggestion('pothole/road'), 800);
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Reported Issue',
+          description: description || 'A new issue was reported via PWA.',
+          category: selectedCategory || aiSuggestion || 'other',
+          latitude: 18.5204, // Defaulting to Pune coordinates for now
+          longitude: 73.8567
+        })
+      });
+      if (res.ok) {
+        setSubmitted(true);
+      } else {
+        console.error('Failed to submit issue');
+        // Let's just proceed to success for the demo if it fails, or maybe not.
+        alert('Failed to submit issue');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Network error submitting issue');
+    } finally {
       setSubmitting(false);
-      setSubmitted(true);
-    }, 1500);
+    }
   }
 
   if (submitted) {

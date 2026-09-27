@@ -35,3 +35,26 @@
 - Created: `plans/06-evaluation-and-paper.md`
 - Created: `AGENTS.md`
 - Created: `plans/progress/SESSION_LOG.md` (this file)
+
+## Session: 2026-09-26 (API Wiring Session)
+**Phase:** Phase 1 (Database + Vertical Slice)
+**Completed:** 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 1.10
+**In Progress:** None
+**Blocked:** 1.1, 1.2, 1.3 (Waiting for User to install and start Docker Desktop for Postgres)
+**Key Decisions:**
+- Configured Vite Proxy in PWA to connect to the backend server.
+- Used standard `fetch` API for all backend communication in the PWA.
+- Wired all major UI pages (Citizen, Officer, Public, MyReports, Home, ReportIssue) to the Express backend.
+**Next Session Should:** Start PostgreSQL (via Docker), run Drizzle migrations, start the backend, and test the full vertical slice.
+**Files Changed:**
+- `nagardrishti-frontend/.env` (created from example)
+- `nagardrishti-frontend/client/src/lib/api.ts` (created)
+- `nagardrishti-frontend/client/src/pages/citizen/CitizenPages.tsx`
+- `nagardrishti-frontend/client/src/pages/officer/OfficerPages.tsx`
+- `nagardrishti-frontend/client/src/pages/transparency/PublicPages.tsx`
+- `nagardrishti-frontend/client/src/pages/research/ResearchPages.tsx`
+- `pwa/vite.config.ts`
+- `pwa/src/pages/ReportIssuePage.tsx`
+- `pwa/src/pages/HomePage.tsx`
+- `pwa/src/pages/MyReportsPage.tsx`
+- `plans/05-implementation-roadmap.md`

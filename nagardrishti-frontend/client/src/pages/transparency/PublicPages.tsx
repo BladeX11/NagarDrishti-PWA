@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ArrowRight, AlertTriangle, ArrowUpRight, Building2, CalendarClock, Clock3, Eye, MapPin, ShieldCheck, Users } from 'lucide-react';
 import { issues as seedIssues, scorecards, statusEvents, weeklyMetrics } from '../../data/seed';
+import { mapApi, transparencyApi, type MapMarker } from '../../lib/api';
 import { loadSubmittedIssues } from '../../data/localDemo';
 import type { Issue, ScorecardSnapshot } from '../../types';
 import { FilterBar } from '../../components/shared/FilterBar';
@@ -15,10 +16,10 @@ import { StatusBadge } from '../../components/shared/StatusBadge';
 const tip={contentStyle:{backgroundColor:'#2A3320',border:0,borderRadius:0,color:'#fff',fontSize:10},itemStyle:{color:'#fff'}};
 
 export function PublicMap(){
-  const [filter,setFilter]=useState({ward:'All',category:'All',status:'All'});const [selected,setSelected]=useState<Issue|null>(null);
-  const [submittedIssues]=useState(loadSubmittedIssues);const allIssues=useMemo(()=>[...seedIssues,...submittedIssues],[submittedIssues]);
-  const filtered=useMemo(()=>allIssues.filter(issue=>(filter.ward==='All'||issue.ward===filter.ward)&&(filter.category==='All'||issue.category===filter.category)&&(filter.status==='All'||issue.status===filter.status)),[filter,allIssues]);
-  const metrics=[['127','Open'],['45','In progress'],['89','Resolved'],['12','Reopened']];
+  const [filter,setFilter]=useState({ward:'All',category:'All',status:'All'});const [selected,setSelected]=useState<any>(null); const [mapIssues,setMapIssues]=useState<MapMarker[]>([]); const [loaded,setLoaded]=useState(false);
+  const [submittedIssues]=useState(loadSubmittedIssues); useEffect(()=>{mapApi.getMarkers().then(data=>{setMapIssues(data);setLoaded(true);}).catch(()=>setLoaded(true));},[]);
+  const allIssues=mapIssues.length>0?mapIssues:[...seedIssues,...submittedIssues]; const filtered=useMemo(()=>(allIssues as any[]).filter(issue=>(filter.ward==='All'||issue.wardId===filter.ward||issue.ward===filter.ward)&&(filter.category==='All'||issue.category===filter.category)&&(filter.status==='All'||issue.status===filter.status)),[filter,allIssues]);
+  const metrics=[[''+allIssues.filter((i:any)=>i.status==='Open').length,'Open'],[''+allIssues.filter((i:any)=>i.status==='In Progress'||i.status==='Assigned').length,'In progress'],[''+allIssues.filter((i:any)=>i.status==='Verified Fixed').length,'Resolved'],[''+allIssues.filter((i:any)=>i.status==='Reopened').length,'Reopened']];
   return <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8"><PageHeader eyebrow="Public information · No login required" title="Public issue map — Pune" description="Privacy-coarsened locations. Explore issue status and service patterns across Pune." action={<span className="flex items-center gap-2 border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[9px] font-black uppercase tracking-wider"><ShieldCheck size={13}/>Redacted public view</span>}/>
     <div className="mb-4 border-2 border-[#2A3320] bg-[#FDFBF7] p-3"><FilterBar filters={[{key:'ward',label:'Ward',options:['All','Ward 11','Ward 12','Ward 14','Ward 15']},{key:'category',label:'Category',options:['All','pothole/road','garbage/waste','drainage/sewage','water supply','streetlight/electrical','stray animals','encroachment','other']},{key:'status',label:'Status',options:['All','Open','Triaged','Assigned','In Progress','Claimed Resolved','Verified Fixed','Reopened']}]} onFilterChange={(key,value)=>setFilter(old=>({...old,[key]:value}))}/></div>
     <div className="relative"><MapView issues={filtered} selectedId={selected?.id} onSelectIssue={setSelected} height="min(67vh, 760px)" publicView/><div className="absolute right-3 top-3 z-[500] hidden w-40 border-4 border-[#2A3320] bg-[#FDFBF7] shadow-[4px_4px_0px_0px_#2A3320] sm:block">{metrics.map(([value,label])=><div key={label} className="flex justify-between border-b-2 border-[#E8E0D0] px-3 py-2.5 last:border-0"><span className="display-title text-xl">{value}</span><span className="self-center text-[9px] font-black uppercase tracking-wider">{label}</span></div>)}</div></div>
@@ -26,7 +27,7 @@ export function PublicMap(){
 }
 
 export function Scorecards(){
-  const [view,setView]=useState<'ward'|'department'>('ward');
+  const [view,setView]=useState<'ward'|'department'>('ward'); const [apiScorecard,setApiScorecard]=useState<any>(null); useEffect(()=>{transparencyApi.getScorecard().then(d=>setApiScorecard(d)).catch(()=>{});},[]);
   const grouped=useMemo(()=>{const groups=new Map<string,ScorecardSnapshot[]>();scorecards.forEach(card=>{const key=view==='ward'?card.ward:card.department;groups.set(key,[...(groups.get(key)||[]),card]);});const result:Array<{name:string;items:ScorecardSnapshot[];total:number;resolved:number;active:number;sla:number;days:string;reopen:number}>=[];groups.forEach((rows,name)=>{const n=rows.length;result.push({name,items:rows,total:rows.reduce((sum:number,row:ScorecardSnapshot)=>sum+row.totalIssues,0),resolved:rows.reduce((sum:number,row:ScorecardSnapshot)=>sum+row.resolvedIssues,0),active:rows.reduce((sum:number,row:ScorecardSnapshot)=>sum+row.activeIssues,0),sla:Math.round(rows.reduce((sum:number,row:ScorecardSnapshot)=>sum+row.slaCompliance,0)/n),days:(rows.reduce((sum:number,row:ScorecardSnapshot)=>sum+row.medianResolutionDays,0)/n).toFixed(1),reopen:Math.round(rows.reduce((sum:number,row:ScorecardSnapshot)=>sum+row.reopenRate,0)/n)});});return result;},[view]);
   const trends=weeklyMetrics;
   return <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-9"><PageHeader eyebrow="Public accountability" title="Ward & department scorecards" description="System-level performance signals. No individual officers are named."/>

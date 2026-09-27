@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TrendingUp, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { AppBar } from '../components/AppBar';
 import { IssueCard } from '../components/IssueCard';
@@ -77,8 +77,36 @@ const FILTER_TABS = ['All', 'Open', 'In Progress', 'Resolved'];
 
 export function HomePage() {
   const [activeFilter, setActiveFilter] = useState('All');
+  const [issues, setIssues] = useState<Issue[]>(MOCK_ISSUES);
 
-  const filteredIssues = MOCK_ISSUES.filter(issue => {
+  useEffect(() => {
+    fetch('/api/issues')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data && data.data.items && data.data.items.length > 0) {
+          // Map backend model to PWA model loosely for demo
+          const mapped = data.data.items.map((apiIssue: any) => ({
+            id: apiIssue.id,
+            public_id: apiIssue.publicRef,
+            category_key: apiIssue.category,
+            department: { id: apiIssue.departmentId || 'd', name: apiIssue.departmentId || 'Department' },
+            ward: { id: apiIssue.wardId || 'w', code: 'W', name: apiIssue.wardId || 'Ward' },
+            status: apiIssue.status.toLowerCase().replace(' ', '_'),
+            urgency: { tier: apiIssue.priority, source: 'system', explanation: apiIssue.urgencyExplanation || '' },
+            supporter_count: apiIssue.supporterCount || 0,
+            submitted_at: apiIssue.createdAt,
+            age_days: apiIssue.ageInDays,
+            location: { type: 'coarsened_point', coordinates: [apiIssue.longitude || 0, apiIssue.latitude || 0], h3_cell: 'demo' },
+            analysis_state: 'completed',
+            description_redacted: apiIssue.description || apiIssue.title,
+          }));
+          setIssues(mapped);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const filteredIssues = issues.filter(issue => {
     if (activeFilter === 'All') return true;
     if (activeFilter === 'Open') return issue.status === 'open';
     if (activeFilter === 'In Progress') return issue.status === 'in_progress' || issue.status === 'assigned' || issue.status === 'triaged';
@@ -88,10 +116,10 @@ export function HomePage() {
 
   // Quick stats
   const stats = {
-    open:     MOCK_ISSUES.filter(i => i.status === 'open').length,
-    progress: MOCK_ISSUES.filter(i => ['triaged','assigned','in_progress'].includes(i.status)).length,
-    resolved: MOCK_ISSUES.filter(i => ['verified_fixed','claimed_resolved'].includes(i.status)).length,
-    breached: MOCK_ISSUES.filter(i => i.age_days > 10 && !['verified_fixed','rejected','duplicate_merged'].includes(i.status)).length,
+    open:     issues.filter(i => i.status === 'open').length,
+    progress: issues.filter(i => ['triaged','assigned','in_progress'].includes(i.status)).length,
+    resolved: issues.filter(i => ['verified_fixed','claimed_resolved'].includes(i.status)).length,
+    breached: issues.filter(i => i.age_days > 10 && !['verified_fixed','rejected','duplicate_merged'].includes(i.status)).length,
   };
 
   return (
