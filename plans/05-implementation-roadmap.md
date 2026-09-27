@@ -27,6 +27,7 @@
 | PWA citizen app (3 pages) | DONE, 2 stubs (Map, Alerts) |
 | PostgreSQL running + migrations applied | DONE |
 | Frontend wired to backend API | DONE |
+| Vertical slice issue submission end-to-end | DONE |
 | FTE hash-chain verification API | NOT DONE |
 | Novelty features (N1-N6) | NOT DONE |
 | AI model training | NOT DONE |
@@ -34,7 +35,7 @@
 
 ---
 
-## Phase 1: Database + Vertical Slice [NOT STARTED]
+## Phase 1: Database + Vertical Slice [COMPLETED]
 _Estimated effort: 2-3 sessions_
 
 > **Goal:** Citizen submits issue in PWA -> backend saves to PostgreSQL -> officer sees it in dashboard -> officer updates status -> citizen sees timeline. ALL through real API calls.

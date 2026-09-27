@@ -117,11 +117,48 @@ Stable across UI, API, database, dataset, and paper.
 
 ---
 
+---
+
 ## Build Progress
 
-See [`plans/05-implementation-roadmap.md`](plans/05-implementation-roadmap.md) for the current phase-by-phase status.
+- Phase 1: Database + Vertical Slice — COMPLETED
+- Phase 2: Complete PWA + Hash-Chain Verification — Next
+- Detailed roadmap: [`plans/05-implementation-roadmap.md`](plans/05-implementation-roadmap.md)
+- Per-session log: [`plans/progress/SESSION_LOG.md`](plans/progress/SESSION_LOG.md)
 
-See [`plans/progress/SESSION_LOG.md`](plans/progress/SESSION_LOG.md) for what was last built and what comes next.
+---
+
+## Getting Started
+
+### 1. Database Setup (Docker)
+Start the PostgreSQL container:
+```bash
+cd nagardrishti-frontend
+docker compose up -d
+npm run db:push
+npm run db:seed
+```
+
+### 2. Backend Server
+Runs on `http://localhost:5000`:
+```bash
+cd nagardrishti-frontend
+npm run dev:server
+```
+
+### 3. Citizen PWA
+Runs on `http://localhost:5174` (proxies `/api` to backend):
+```bash
+cd pwa
+npm run dev
+```
+
+### 4. Administrative / Public Dashboards
+Runs on `http://localhost:5173`:
+```bash
+cd nagardrishti-frontend
+npm run dev
+```
 
 ---
 

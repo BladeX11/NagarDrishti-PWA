@@ -23,3 +23,9 @@
 **Context:** `generatePublicRef()` used a process-level counter starting at 100. Every server restart reset it to 101, colliding with seeded issues `ND-101`..`ND-125`.
 **Solution:** Replaced the counter with a timestamp+random string (e.g. `ND-LQ2X4XA8K`). Guaranteed unique across restarts.
 **Date:** 2026-09-27
+
+### Missing Demo Auth Header in Citizen PWA (401 Unauthorized)
+**Problem:** `POST /api/issues` from Citizen PWA was rejected with `401 Unauthorized`.
+**Context:** The Express backend auth middleware expected either JWT or `x-demo-role` header. PWA `fetch()` calls did not supply any authentication header by default.
+**Solution:** Seeded `demo_role: 'citizen'` in `pwa/src/main.tsx` localStorage and attached `x-demo-role: citizen` to issue submission requests.
+**Date:** 2026-09-27
