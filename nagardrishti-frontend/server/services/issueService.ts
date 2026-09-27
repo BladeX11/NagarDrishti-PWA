@@ -7,12 +7,11 @@ import { priorityService } from './priorityService.js';
 import { nanoid } from 'nanoid';
 import { aiQueue } from '../ai/queue.js';
 
-// Counter for public reference IDs
-let refCounter = 100;
-
 function generatePublicRef(): string {
-  refCounter++;
-  return `ND-${refCounter}`;
+  // Use timestamp + random to avoid collisions with seeded ND-101..ND-125 after server restarts
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `ND-${ts}${rand}`;
 }
 
 function computeAge(createdAt: Date): { age: string; ageInDays: number } {

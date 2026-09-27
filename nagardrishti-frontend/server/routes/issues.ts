@@ -21,7 +21,8 @@ router.post('/', requireAuth, requireRole('citizen'), async (req, res) => {
     const issue = await issueService.createIssue(req.body, req.user!.id);
     res.json({ success: true, data: issue });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[POST /api/issues] ERROR:', error?.message ?? error);
+    res.status(500).json({ success: false, error: error.message, detail: process.env.NODE_ENV !== 'production' ? error?.detail ?? error?.stack?.slice(0,300) : undefined });
   }
 });
 

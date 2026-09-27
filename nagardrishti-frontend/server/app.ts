@@ -69,6 +69,13 @@ export function createApp(): Express {
     res.status(404).json({ success: false, error: 'API endpoint not found' });
   });
 
+  // Fallback for root in dev mode so users don't see "Cannot GET /"
+  if (process.env.NODE_ENV !== 'production') {
+    app.get('/', (req, res) => {
+      res.redirect('http://localhost:3000');
+    });
+  }
+
   // Global Error Handler
   app.use(errorHandler);
 
