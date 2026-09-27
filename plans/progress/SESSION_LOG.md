@@ -58,3 +58,20 @@
 - `pwa/src/pages/HomePage.tsx`
 - `pwa/src/pages/MyReportsPage.tsx`
 - `plans/05-implementation-roadmap.md`
+
+## Session: 2026-09-27 (Database Setup & Full Wiring)
+**Phase:** Phase 1 (Database + Vertical Slice)
+**Completed:** 1.1, 1.2, 1.3 (Phase 1 is now DONE)
+**In Progress:** None
+**Blocked:** None
+**Key Decisions:**
+- Replaced Docker Hub MinIO image with `bitnami/minio`, but eventually removed Redis and MinIO temporarily from `docker-compose.yml` to focus purely on PostgreSQL for Phase 1 since they aren't strictly required for startup yet.
+- Fixed `dotenv` loading order in the backend (`server/index.ts` and `server/db/seed.ts`) so the backend connects to the correct Docker PostgreSQL instance instead of a fallback.
+- Fixed a syntax error in the Officer PWA dashboard search filter logic.
+**Next Session Should:** Start Phase 2 (Complete PWA + Hash-Chain Verification). The backend, PWA, and dashboard are currently running in the background.
+**Files Changed:**
+- `nagardrishti-frontend/docker-compose.yml`
+- `nagardrishti-frontend/server/db/seed.ts`
+- `nagardrishti-frontend/server/index.ts`
+- `nagardrishti-frontend/client/src/pages/officer/OfficerPages.tsx`
+- `plans/05-implementation-roadmap.md`

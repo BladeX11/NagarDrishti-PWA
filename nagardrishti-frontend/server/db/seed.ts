@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { db } from './index.js';
 import * as schema from './schema.js';
 import crypto from 'crypto';

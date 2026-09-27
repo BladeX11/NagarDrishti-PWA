@@ -25,8 +25,8 @@
 | Backend routes and services | DONE (7 services, 6 route files) |
 | Frontend UI shells (4 dashboards) | DONE (~90%) |
 | PWA citizen app (3 pages) | DONE, 2 stubs (Map, Alerts) |
-| PostgreSQL running + migrations applied | NOT DONE |
-| Frontend wired to backend API | NOT DONE (biggest gap) |
+| PostgreSQL running + migrations applied | DONE |
+| Frontend wired to backend API | DONE |
 | FTE hash-chain verification API | NOT DONE |
 | Novelty features (N1-N6) | NOT DONE |
 | AI model training | NOT DONE |
@@ -43,9 +43,9 @@ _Estimated effort: 2-3 sessions_
 
 | # | Task | Files | Status |
 |---|---|---|---|
-| 1.1 | Get PostgreSQL running (Docker or local) | `nagardrishti-frontend/.env`, `docker-compose.yml` | NOT DONE |
-| 1.2 | Run Drizzle migrations + seed data | `server/db/seed.ts`, `drizzle.config.ts` | NOT DONE |
-| 1.3 | Start backend, verify API responds | `server/index.ts` | NOT DONE |
+| 1.1 | Get PostgreSQL running (Docker or local) | `nagardrishti-frontend/.env`, `docker-compose.yml` | DONE |
+| 1.2 | Run Drizzle migrations + seed data | `server/db/seed.ts`, `drizzle.config.ts` | DONE |
+| 1.3 | Start backend, verify API responds | `server/index.ts` | DONE |
 | 1.4 | Create centralized API client for frontend | New: `client/src/lib/api.ts` | DONE |
 | 1.5 | Wire CitizenPages to POST /api/issues | `client/src/pages/citizen/CitizenPages.tsx` | DONE |
 | 1.6 | Wire OfficerPages to GET /api/issues + status updates | `client/src/pages/officer/OfficerPages.tsx` | DONE |
@@ -55,10 +55,10 @@ _Estimated effort: 2-3 sessions_
 | 1.10 | Wire PWA HomePage + MyReportsPage to API | `pwa/src/pages/HomePage.tsx`, `MyReportsPage.tsx` | DONE |
 
 ### Done When
-- [ ] Create an issue in PWA -> it appears in officer dashboard
-- [ ] Officer changes status -> citizen sees updated timeline
-- [ ] Public dashboard shows the issue on a map
-- [ ] All data comes from PostgreSQL, zero local demo data usage
+- [x] Create an issue in PWA -> it appears in officer dashboard
+- [x] Officer changes status -> citizen sees updated timeline
+- [x] Public dashboard shows the issue on a map
+- [x] All data comes from PostgreSQL, zero local demo data usage
 
 ---
 
