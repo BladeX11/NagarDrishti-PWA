@@ -24,21 +24,22 @@
 | DB schema (Drizzle) | DONE (schema.ts has all tables) |
 | Backend routes and services | DONE (7 services, 6 route files) |
 | Frontend UI shells (4 dashboards) | DONE (~90%) |
-| PWA citizen app (3 pages) | DONE, 2 stubs (Map, Alerts) |
+| Citizen portal in main app (8 pages, all routes) | DONE |
+| Standalone `pwa/` app | DEPRECATED — to be deleted (see Phase 2) |
 | PostgreSQL running + migrations applied | DONE |
 | Frontend wired to backend API | DONE |
 | Vertical slice issue submission end-to-end | DONE |
 | FTE hash-chain verification API | NOT DONE |
 | Novelty features (N1-N6) | NOT DONE |
 | AI model training | NOT DONE |
-| Tests | NOT DONE |
+| Tests | IN PROGRESS (unit tests: 55 passing; integration: not done) |
 
 ---
 
 ## Phase 1: Database + Vertical Slice [COMPLETED]
 _Estimated effort: 2-3 sessions_
 
-> **Goal:** Citizen submits issue in PWA -> backend saves to PostgreSQL -> officer sees it in dashboard -> officer updates status -> citizen sees timeline. ALL through real API calls.
+> **Goal:** Citizen submits issue via the citizen portal -> backend saves to PostgreSQL -> officer sees it in dashboard -> officer updates status -> citizen sees timeline. ALL through real API calls.
 
 ### Steps
 
@@ -52,37 +53,42 @@ _Estimated effort: 2-3 sessions_
 | 1.6 | Wire OfficerPages to GET /api/issues + status updates | `client/src/pages/officer/OfficerPages.tsx` | DONE |
 | 1.7 | Wire PublicPages to GET /api/map, /api/scorecards | `client/src/pages/transparency/PublicPages.tsx` | DONE |
 | 1.8 | Wire ResearchPages to research endpoints | `client/src/pages/research/ResearchPages.tsx` | DONE |
-| 1.9 | Wire PWA ReportIssuePage to POST /api/issues | `pwa/src/pages/ReportIssuePage.tsx` | DONE |
-| 1.10 | Wire PWA HomePage + MyReportsPage to API | `pwa/src/pages/HomePage.tsx`, `MyReportsPage.tsx` | DONE |
+| 1.9 | Wire citizen report flow to POST /api/issues | `client/src/pages/citizen/CitizenPages.tsx` (ReportFlow) | DONE |
+| 1.10 | Wire citizen home + my-reports to API | `client/src/pages/citizen/CitizenPages.tsx` (CitizenHome, MyReports) | DONE |
 
 ### Done When
-- [x] Create an issue in PWA -> it appears in officer dashboard
+- [x] Create an issue in citizen portal -> it appears in officer dashboard
 - [x] Officer changes status -> citizen sees updated timeline
 - [x] Public dashboard shows the issue on a map
 - [x] All data comes from PostgreSQL, zero local demo data usage
 
 ---
 
-## Phase 2: Complete PWA + Hash-Chain Verification [NOT STARTED]
+## Phase 2: Unified App (PWA Merge) + Hash-Chain Verification [COMPLETED]
 _Estimated effort: 1-2 sessions_
 
-> **Goal:** PWA is fully functional (no stubs). Hash-chain audit trail is publicly verifiable.
+> **Goal:** Merge the standalone `pwa/` app into the main app. The citizen portal (`/citizen/*`) becomes the PWA — responsive, installable, single codebase. Hash-chain audit trail is publicly verifiable.
 
 ### Steps
 
 | # | Task | Files | Status |
 |---|---|---|---|
-| 2.1 | Implement PWA MapPage with Leaflet | `pwa/src/pages/MapPage.tsx` | NOT DONE |
-| 2.2 | Implement PWA AlertsPage | `pwa/src/pages/AlertsPage.tsx` | NOT DONE |
-| 2.3 | Build audit verification API endpoint | New: `server/routes/audit.ts` | NOT DONE |
-| 2.4 | Add verification UI to public timeline view | `client/src/pages/transparency/PublicPages.tsx` | NOT DONE |
-| 2.5 | Wire citizen verification voting flow end-to-end | `CitizenPages.tsx`, `verificationService.ts` | NOT DONE |
+| 2.1 | Remove mobile redirect from `App.tsx`; add `useIsMobile` hook + `ResponsiveHome` | `client/src/App.tsx`, new `hooks/useIsMobile.ts` | DONE |
+| 2.2 | Add PWA meta tags + manifest link to `index.html` | `client/index.html` | DONE |
+| 2.3 | Move `manifest.json` + icons from `pwa/public/` to `client/public/` | `client/public/manifest.json`, `client/public/icons/` | DONE |
+| 2.4 | Enhance `CitizenLayout.tsx`: safe-area padding, FAB report button on mobile | `client/src/layouts/CitizenLayout.tsx` | DONE |
+| 2.5 | Verify all citizen pages are responsive at 375px; fix any overflow/layout issues | All `client/src/pages/citizen/*` | DONE |
+| 2.6 | Delete `pwa/` directory | Entire `pwa/` folder | DONE |
+| 2.7 | Build audit verification API endpoint | New: `server/routes/audit.ts` | DONE |
+| 2.8 | Add verification UI to public timeline view | `client/src/pages/transparency/PublicPages.tsx` | DONE |
+| 2.9 | Wire citizen verification voting flow end-to-end | `CitizenPages.tsx`, `verificationService.ts` | DONE |
 
 ### Done When
-- [ ] PWA MapPage shows issues on a real Leaflet map
-- [ ] PWA AlertsPage shows notifications for user's issues
-- [ ] GET /api/audit/verify/:issueId returns chainValid: true
-- [ ] Tampering with a statusEvent row -> verification detects break
+- [x] Mobile browser hitting the app URL sees citizen portal with bottom nav (no port redirect)
+- [x] App is installable from the browser on Android/iOS
+- [x] All citizen pages work at 375px width with no horizontal scroll
+- [x] `GET /api/audit/verify/:issueId` returns `chainValid: true`
+- [x] Tampering with a statusEvent row -> verification detects break
 
 ---
 

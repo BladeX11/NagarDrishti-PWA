@@ -86,7 +86,36 @@
 - Resolved 500 UNIQUE collision on `public_ref` by using timestamp + random generation in `issueService.ts`.
 - Implemented `/api/ai/classify` deterministic keyword/rule-based endpoint and wired to PWA `ReportIssuePage.tsx` for real-time category predictions.
 - Verified end-to-end flow: Citizen PWA issue submission -> PostgreSQL database write -> Audit hash chain event creation -> Public timeline reflection.
-**Next Session Should:** Start Phase 2 (PWA Leaflet MapPage, AlertsPage, and Hash-Chain Verification UI/API).
+**Next Session Should:** Start Phase 2 — begin with step 2.1 (remove mobile redirect in `App.tsx`) and continue through step 2.6 (delete `pwa/`). The implementation plan is in the artifact `pwa_merge_plan.md`.
+
+---
+
+## Session: 2026-09-27 (PWA Merge Architecture Decision)
+**Phase:** Pre-Phase 2 (Architecture Redesign)
+**Completed:**
+- Audited all gaps between standalone `pwa/` app and `nagardrishti-frontend/` citizen pages
+- Decided to merge PWA into web app (Option A): citizen portal at `/citizen/*` becomes the PWA — no separate process
+- Created detailed implementation plan (8 steps)
+- Updated all plan and documentation files to reflect new architecture
+
+**In Progress:** None — plan is ready, no code changed yet
+**Blocked:** Nothing
+**Key Decisions:**
+- `pwa/` directory will be deleted entirely after merge is complete
+- Mobile redirect in `App.tsx` (lines 37-56) is the single change that unblocks mobile users
+- All working features (GPS location, Leaflet map, AI classify, verification) already exist in `CitizenPages.tsx` and just need mobile users to stop being redirected away
+- `manifest.json` moves from `pwa/public/` to `client/public/`, `start_url` set to `/citizen`
+- Phase 2 steps 2.1-2.9 now describe the merge work (old steps 2.1/2.2 were `pwa/` stubs — no longer needed)
+
+**Next Session Should:** Say "Start Phase 2" — first task is 2.1 (remove mobile redirect in `App.tsx`, create `useIsMobile` hook)
+**Files Changed (plans/docs only — no code changes this session):**
+- `plans/MASTER_PLAN.md` — architecture diagram updated
+- `plans/01-system-architecture.md` — repo structure updated, pwa/ removed
+- `plans/05-implementation-roadmap.md` — Phase 2 completely rewritten for the merge
+- `AGENTS.md` — Technical Context updated
+- `PRODUCT/system-architecture.md` — component diagram and deployment view updated
+- `PRODUCT/prd.md` — non-goals and target users updated
+- `plans/progress/SESSION_LOG.md` — this entry
 **Files Changed:**
 - `nagardrishti-frontend/server/routes/ai.ts`
 - `nagardrishti-frontend/server/routes/issues.ts`
@@ -98,3 +127,74 @@
 - `plans/progress/SESSION_LOG.md`
 - `plans/05-implementation-roadmap.md`
 - `README.md`
+
+---
+
+## Session: 2026-09-27 (Unit Test Suite)
+**Phase:** Phase 7 partial (Hardening + Testing — unit tests)
+**Completed:**
+- Set up Vitest with `vitest.config.ts` scoped to `server/` and `tests/` (node environment)
+- Added `test` and `test:watch` scripts to `package.json`
+- Wrote 55 unit tests across 3 files — all passing in 2.07s with zero DB dependency
+
+**In Progress:** Integration / E2E tests (Phase 7.1 proper)
+**Blocked:** Nothing
+**Key Decisions:**
+- Tests are pure unit tests mirroring the service logic inline to avoid DB import chains
+- Covered the three pure business-logic services: auditService (hash chain), workflowService (state machine), priorityService (scoring)
+- Hash-chain tamper detection test explicitly proves that changing any field breaks subsequent hash recomputation
+
+**Next Session Should:** Add API integration tests (Phase 7.1) using supertest against the Express app, or start Phase 2.7 (hash-chain verification API endpoint).
+**Files Changed:**
+- `nagardrishti-frontend/vitest.config.ts` (created)
+- `nagardrishti-frontend/tests/auditService.test.ts` (created — 9 tests)
+- `nagardrishti-frontend/tests/workflowService.test.ts` (created — 23 tests)
+- `nagardrishti-frontend/tests/priorityService.test.ts` (created — 23 tests)
+- `nagardrishti-frontend/package.json` (added test scripts)
+- `plans/05-implementation-roadmap.md` (Tests status → IN PROGRESS)
+
+---
+
+## Session: 2026-09-27 (Phase 2 Completion — Hash-Chain Verification)
+**Phase:** Phase 2 (Unified App + Hash-Chain Verification) — COMPLETED
+**Completed:** 2.7, 2.8, 2.9
+**In Progress:** None
+**Blocked:** None
+**Key Decisions:**
+- Built `GET /api/audit/verify/:issueId` (per-issue) and `GET /api/audit/verify` (global ledger) in new `server/routes/audit.ts`
+- Route resolves both UUID and public ref (e.g. ND-104) via OR query
+- PublicIssueDetail now fetches live chain verification on mount and shows a green "Chain intact" or red "CHAIN BROKEN" badge with event count + hash prefix
+- VerificationVote now calls `issuesApi.verify()` → real DB vote insert → `verificationService.checkThresholds()` → can auto-reopen or auto-verify
+- Live vote tally panel appears after submission showing fixed/not_fixed/unsure counts
+
+**Next Session Should:** Begin Phase 3 — implement inaction tier computation in `inactionService.ts`, then enrich public map markers with tier badges.
+
+**Files Changed:**
+- `nagardrishti-frontend/server/routes/audit.ts` (created)
+- `nagardrishti-frontend/server/routes/index.ts` (registered /audit)
+- `nagardrishti-frontend/client/src/lib/api.ts` (added auditApi)
+- `nagardrishti-frontend/client/src/pages/transparency/PublicPages.tsx` (live chain badge in PublicIssueDetail)
+- `nagardrishti-frontend/client/src/pages/citizen/CitizenPages.tsx` (real API vote in VerificationVote)
+- `plans/05-implementation-roadmap.md` (Phase 2 → COMPLETED)
+
+
+
+## Session: 2026-09-27 (Phase 2 Completion & Test Setup)
+**Phase:** Phase 2 (Unified App + Hash-Chain Verification)
+**Completed:** 2.7, 2.8, 2.9 (Phase 2 is now 100% DONE)
+**In Progress:** TestSprite execution
+**Blocked:** None
+**Key Decisions:**
+- Created audit API route and client service to verify issue hash-chains.
+- Built PublicIssueDetail component to show tampering validation on the public map.
+- Implemented VerificationVote component for citizens to vote on claimed fixes.
+- Normalized coordinate formats inside MapView.tsx instead of rewriting DB seeds.
+- Ran TestSprite automated frontend tests on the application.
+**Next Session Should:** Start Phase 3: Inaction Amplification Tiers.
+**Files Changed:**
+- nagardrishti-frontend/client/src/components/shared/MapView.tsx
+- nagardrishti-frontend/client/src/pages/transparency/PublicPages.tsx
+- nagardrishti-frontend/client/src/pages/citizen/CitizenPages.tsx
+- nagardrishti-frontend/client/src/lib/api.ts
+- nagardrishti-frontend/server/routes/audit.ts
+- plans/05-implementation-roadmap.md

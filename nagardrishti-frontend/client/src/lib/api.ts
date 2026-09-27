@@ -273,3 +273,28 @@ export const researchApi = {
     return request<unknown>('/research/ai/metadata');
   },
 };
+
+// ── Audit / Chain Verification ────────────────────────────────────────────────
+
+export interface ChainVerificationResult {
+  issueId?: string;
+  publicRef?: string;
+  chainValid: boolean;
+  eventCount: number;
+  brokenAt?: string;
+  latestHash?: string;
+  checkedAt: string;
+  message?: string;
+  valid?: boolean;
+  totalEvents?: number;
+}
+
+export const auditApi = {
+  verifyIssue(issueId: string) {
+    return request<ChainVerificationResult>(`/audit/verify/${issueId}`);
+  },
+  verifyGlobal() {
+    return request<ChainVerificationResult>('/audit/verify');
+  },
+};
+

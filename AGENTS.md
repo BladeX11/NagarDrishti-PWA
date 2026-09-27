@@ -39,9 +39,10 @@ Every feature serves the contribution statement in `MASTER_PLAN.md`. If a task d
 ## Technical Context
 
 - **Main app:** `nagardrishti-frontend/` — Express.js + React + TypeScript + Drizzle ORM + PostgreSQL
-- **Standalone PWA:** `pwa/` — Vite + React (citizen mobile-first)
+- **Citizen portal (PWA):** `/citizen/*` routes inside the main app — responsive, installable, mobile-first layout; `pwa/` directory is deprecated and deleted
 - **UI components:** shadcn/ui (already in project)
 - **Maps:** Leaflet
+- **API client:** `nagardrishti-frontend/client/src/lib/api.ts` — centralized, all citizen pages use this (has auth headers)
 - **DB schema:** `nagardrishti-frontend/server/db/schema.ts` (READ THIS before any DB work)
 - **API routes:** `nagardrishti-frontend/server/routes/` (READ relevant route file before modifying)
 - **AI modules:** `nagardrishti-frontend/server/ai/` (orchestrator, queue, rules, features)

@@ -25,18 +25,21 @@
 ## Architecture Overview
 
 ```
-Citizen PWA          Public Dashboard         Officer Console        Research Dashboard
-    |                      |                       |                       |
-    v                      v                       v                       v
-    +----------------------+---+-------------------+-----------------------+
-                               |
-                        Express API Layer
-                               |
-          +----------+---------+---------+------------------+
-          |          |         |         |                  |
-     PostgreSQL   Redis    Object    Forced             AI Modules
-     (Drizzle)    Queue    Storage   Transparency       M1-M7 + N1-N4
-                                     Engine (FTE)
+ Citizen Portal (responsive)   Public Dashboard   Officer Console   Research Dashboard
+   Mobile: bottom-nav PWA        |                     |                  |
+   Desktop: sidebar layout       |                     |                  |
+          |                      |                     |                  |
+          v                      v                     v                  v
+          +----------------------+---------------------+------------------+
+                                 |
+                      nagardrishti-frontend
+                      (single Vite + Express app)
+                                 |
+          +----------+-----------+---------+------------------+
+          |          |           |         |                  |
+     PostgreSQL   Redis      Object    Forced             AI Modules
+     (Drizzle)    Queue      Storage   Transparency       M1-M7 + N1-N4
+                                        Engine (FTE)
 ```
 
 ---
@@ -70,7 +73,7 @@ Citizen PWA          Public Dashboard         Officer Console        Research Da
 
 | Role | Surface | Key Actions |
 |---|---|---|
-| Citizen | PWA (mobile-first) | Report, support, verify fix, track status |
+| Citizen | Responsive citizen portal — `/citizen/*` (PWA-installable, mobile-first layout) | Report, support, verify fix, track status |
 | Officer | Dashboard (desktop) | Triage, assign, update, submit proof |
 | Public Visitor | Transparency Dashboard | Inspect ward data, scorecards, equity maps |
 | Researcher | Research Dashboard | Review predictions, audit ledger, experiments |

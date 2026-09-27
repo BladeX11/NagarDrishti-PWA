@@ -16,7 +16,7 @@
 | Database | PostgreSQL | Relational lifecycle + spatial queries |
 | Async Queue | Redis + BullMQ (or simple in-memory queue for MVP) | AI inference doesn't block report creation |
 | Object Storage | Local filesystem (MinIO for production) | Zero-budget prototype storage |
-| PWA | Service Worker, IndexedDB | Installable, offline drafts, retry queue |
+| PWA | `manifest.json`, service worker, IndexedDB | Installable from `/citizen` route in main app — no separate process |
 | AI/ML | Python microservice or Node.js rule-based (MVP) | Rule baselines first, ML later |
 
 ---
@@ -34,34 +34,37 @@ NagarDrishti-app/
 |   |-- 05-implementation-roadmap.md
 |   |-- 06-evaluation-and-paper.md
 |
-|-- nagardrishti-frontend/     # Main full-stack app
+|-- nagardrishti-frontend/     # Single full-stack app (web + PWA citizen portal)
 |   |-- client/src/
 |   |   |-- components/        # Shared UI components
 |   |   |-- pages/
-|   |   |   |-- citizen/       # Citizen PWA views
-|   |   |   |-- officer/       # Officer dashboard
+|   |   |   |-- citizen/       # Citizen portal views (responsive, PWA-installable)
+|   |   |   |-- officer/       # Officer dashboard (desktop)
 |   |   |   |-- transparency/  # Public dashboard
 |   |   |   |-- research/      # Research dashboard
 |   |   |-- layouts/           # Role-based layouts
+|   |   |   |-- CitizenLayout.tsx  # Mobile: bottom-nav + AppBar | Desktop: sidebar
+|   |   |-- hooks/             # Custom hooks (useIsMobile, etc.)
 |   |   |-- contexts/          # React contexts (theme, auth)
-|   |   |-- hooks/             # Custom hooks
 |   |   |-- data/              # Local demo data (to be replaced by API)
 |   |   |-- types/             # TypeScript types
+|   |   |-- lib/api.ts         # Centralized API client with auth headers
+|   |
+|   |-- client/public/         # Static assets + PWA manifest
+|   |   |-- manifest.json      # PWA manifest (start_url: /citizen)
+|   |   |-- icons/             # PWA icons (192px, 512px)
+|   |
+|   |-- client/index.html      # Has PWA meta tags + manifest link
 |   |
 |   |-- server/
 |   |   |-- routes/            # Express route handlers
-|   |   |-- services/          # Business logic (issue, workflow, audit, etc.)
+|   |   |-- services/          # Business logic
 |   |   |-- ai/                # AI orchestrator, queue, rules, features
 |   |   |-- db/                # Drizzle schema, migrations, seed
 |   |   |-- middleware/        # Auth, validation, error handling
 |   |   |-- utils/
 |   |
 |   |-- shared/                # Types shared between client and server
-|
-|-- pwa/                       # Standalone citizen PWA (Vite + React)
-|   |-- src/pages/             # Mobile-first citizen pages
-|   |-- src/components/        # PWA-specific components
-|   |-- public/                # manifest.json, icons
 |
 |-- PRODUCT/                   # Product docs (PRD, SRS, API spec, data model)
 |-- TEAM/

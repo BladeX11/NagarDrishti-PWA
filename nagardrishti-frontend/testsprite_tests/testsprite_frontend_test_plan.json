@@ -1,0 +1,798 @@
+[
+  {
+    "id": "TC001",
+    "title": "Submit a new civic issue with guidance",
+    "description": "A citizen can report a new issue with a photo, location, description, and category guidance, then receive tracking details for the created report.",
+    "category": "Report Civic Issue",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/report"
+      },
+      {
+        "type": "action",
+        "description": "Upload a photo for the report"
+      },
+      {
+        "type": "action",
+        "description": "Allow approximate location access"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a description of the issue"
+      },
+      {
+        "type": "action",
+        "description": "Review the category suggestion"
+      },
+      {
+        "type": "action",
+        "description": "Accept the suggested category"
+      },
+      {
+        "type": "action",
+        "description": "Submit the report"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue confirmation is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify tracking details for the created issue are visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "Move an issue through triage to a claimed resolution",
+    "description": "A mock officer can open an issue from the queue, change its status through the workflow, and claim it as resolved with proof attached.",
+    "category": "Officer Update Status / triage queue",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /officer/queue"
+      },
+      {
+        "type": "action",
+        "description": "Open an issue from the triage queue"
+      },
+      {
+        "type": "action",
+        "description": "Assign the issue"
+      },
+      {
+        "type": "action",
+        "description": "Move the issue to in-progress"
+      },
+      {
+        "type": "action",
+        "description": "Add proof of fix notes or evidence"
+      },
+      {
+        "type": "action",
+        "description": "Mark the issue as claimed resolved"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue shows the updated workflow state"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the proof-related update is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC003",
+    "title": "Submit a verification vote for a claimed fix",
+    "description": "A citizen can review the before-and-after evidence for a claimed fix and submit a verification vote that is recorded on the issue timeline.",
+    "category": "Verify Claimed Fix",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/issue/1/verify"
+      },
+      {
+        "type": "action",
+        "description": "Review the before-and-after evidence for the issue"
+      },
+      {
+        "type": "action",
+        "description": "Select fixed as the verification vote"
+      },
+      {
+        "type": "action",
+        "description": "Submit the verification vote"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the verification vote is recorded"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue timeline reflects the updated verification activity"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Review a reported issue timeline and current status",
+    "description": "A citizen can open a reported issue and inspect its lifecycle timeline, current status, and supporting activity.",
+    "category": "View Citizen Issue Timeline",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen"
+      },
+      {
+        "type": "action",
+        "description": "Open one of the user's reported issues"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue details page is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the status timeline and supporting activity are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC005",
+    "title": "Assign and advance an issue through the officer workflow",
+    "description": "A mock officer can open an issue from the queue, assign it, move it to in progress, and claim it resolved with proof of work.",
+    "category": "Officer Triage and Status Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /officer/queue"
+      },
+      {
+        "type": "action",
+        "description": "Open an issue from the triage queue"
+      },
+      {
+        "type": "action",
+        "description": "Assign the issue to the current officer"
+      },
+      {
+        "type": "action",
+        "description": "Update the issue status to in progress"
+      },
+      {
+        "type": "action",
+        "description": "Mark the issue as claimed resolved"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue shows the claimed resolved state"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the timeline reflects the officer progress"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC006",
+    "title": "Verify a claimed fix from the issue timeline",
+    "description": "A citizen can review before-and-after evidence on a claimed fix and submit a verification vote from the issue timeline.",
+    "category": "View Citizen Issue Timeline",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen"
+      },
+      {
+        "type": "action",
+        "description": "Open one of the user's reported issues"
+      },
+      {
+        "type": "action",
+        "description": "Open the verification view for the claimed fix"
+      },
+      {
+        "type": "action",
+        "description": "Review the before-and-after evidence"
+      },
+      {
+        "type": "action",
+        "description": "Vote that the issue is fixed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the verification result is recorded"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue reflects the updated verification state"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC007",
+    "title": "Support a nearby duplicate issue from the citizen dashboard",
+    "description": "A citizen can find a matching nearby issue and support it instead of creating a duplicate, increasing the shared support count.",
+    "category": "Support Nearby Existing Issue",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen"
+      },
+      {
+        "type": "action",
+        "description": "Open the nearby issues view"
+      },
+      {
+        "type": "action",
+        "description": "Choose a nearby issue that matches the same problem"
+      },
+      {
+        "type": "action",
+        "description": "Support the issue"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the support count increases"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue remains available as a shared report"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC008",
+    "title": "Record that a claimed fix is not yet resolved",
+    "description": "A citizen can review the evidence for a claimed fix and submit a not fixed vote that is reflected in the issue's verification state.",
+    "category": "Verify Claimed Fix",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/issue/1/verify"
+      },
+      {
+        "type": "action",
+        "description": "Review the before-and-after evidence for the issue"
+      },
+      {
+        "type": "action",
+        "description": "Select not fixed as the verification vote"
+      },
+      {
+        "type": "action",
+        "description": "Submit the verification vote"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the not fixed vote is recorded"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue shows that the fix is still disputed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC009",
+    "title": "Correct the suggested category before submitting a report",
+    "description": "A citizen can override the suggested category during issue submission and the created issue reflects the chosen category.",
+    "category": "Report Civic Issue",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/report"
+      },
+      {
+        "type": "action",
+        "description": "Upload a photo for the report"
+      },
+      {
+        "type": "action",
+        "description": "Allow approximate location access"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a description of the issue"
+      },
+      {
+        "type": "action",
+        "description": "Review the category suggestion"
+      },
+      {
+        "type": "action",
+        "description": "Select a different category"
+      },
+      {
+        "type": "action",
+        "description": "Submit the report"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the created issue is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected category is reflected on the created issue"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC010",
+    "title": "Attach proof of work while resolving an issue",
+    "description": "A mock officer can add a note and proof photo during issue resolution and see the proof recorded in the issue history.",
+    "category": "Officer Triage and Status Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /officer/issue/1"
+      },
+      {
+        "type": "action",
+        "description": "Review the issue details and similar issues"
+      },
+      {
+        "type": "action",
+        "description": "Assign the issue to the current officer"
+      },
+      {
+        "type": "action",
+        "description": "Update the issue status to in progress"
+      },
+      {
+        "type": "action",
+        "description": "Add a resolution note"
+      },
+      {
+        "type": "action",
+        "description": "Attach proof of work"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the proof of work is recorded"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue history includes the new officer update"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC011",
+    "title": "Support an existing nearby issue during report creation",
+    "description": "A citizen can switch from creating a duplicate report to supporting an existing nearby issue and see that support recorded in their activity.",
+    "category": "Support Nearby Existing Issue",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/report"
+      },
+      {
+        "type": "action",
+        "description": "Upload a photo for the report"
+      },
+      {
+        "type": "action",
+        "description": "Allow approximate location access"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a description of the issue"
+      },
+      {
+        "type": "action",
+        "description": "Review nearby duplicate suggestions"
+      },
+      {
+        "type": "action",
+        "description": "Choose to support an existing nearby issue"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the support action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected issue is added to the user's supported items"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the duplicate report is not created"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC012",
+    "title": "Show a validation error when report details are incomplete",
+    "description": "A citizen cannot submit an issue report without the required description and sees a validation error instead of creating the report.",
+    "category": "Report Civic Issue",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/report"
+      },
+      {
+        "type": "action",
+        "description": "Upload a photo for the report"
+      },
+      {
+        "type": "action",
+        "description": "Allow approximate location access"
+      },
+      {
+        "type": "action",
+        "description": "Submit the report"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue was not created"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC013",
+    "title": "Let a public visitor inspect the transparency map and filters",
+    "description": "A public visitor can open the transparency portal, review the map, and use filters to narrow visible civic issues.",
+    "category": "Review Public Transparency Map and Scorecards",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /transparency"
+      },
+      {
+        "type": "action",
+        "description": "Review the public issue map"
+      },
+      {
+        "type": "action",
+        "description": "Apply a ward, category, or status filter"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the map updates to reflect the selected filter"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify matching public issue markers are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC014",
+    "title": "Review public issue details with privacy redaction",
+    "description": "A public visitor can open a transparency issue page and see redacted issue information with public evidence preserved.",
+    "category": "transparency",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /transparency"
+      },
+      {
+        "type": "action",
+        "description": "Open a public issue from the map or list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the redacted issue details page is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify public evidence or status information is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC015",
+    "title": "Open a redacted public issue and review its timeline",
+    "description": "A public visitor can open a public issue detail page and see redacted information, a public timeline, and media that preserves privacy.",
+    "category": "Review Public Transparency Map and Scorecards",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /transparency"
+      },
+      {
+        "type": "action",
+        "description": "Open a public issue from the map or list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue detail page shows redacted public information"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the public timeline and redacted media are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC016",
+    "title": "Submit an unsure verification vote",
+    "description": "A citizen can mark a claimed fix as unsure when the evidence is not conclusive and the issue still reflects a pending community verdict.",
+    "category": "View Citizen Issue Timeline",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen"
+      },
+      {
+        "type": "action",
+        "description": "Open one of the user's reported issues"
+      },
+      {
+        "type": "action",
+        "description": "Open the verification view for the claimed fix"
+      },
+      {
+        "type": "action",
+        "description": "Vote that the result is unsure"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the unsure verification is recorded"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue remains in a review state"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC017",
+    "title": "Record uncertainty when verifying a claimed fix",
+    "description": "A citizen can review the evidence for a claimed fix and submit an unsure vote without asserting that the issue is fixed or broken.",
+    "category": "Verify Claimed Fix",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/issue/1/verify"
+      },
+      {
+        "type": "action",
+        "description": "Review the before-and-after evidence for the issue"
+      },
+      {
+        "type": "action",
+        "description": "Select unsure as the verification vote"
+      },
+      {
+        "type": "action",
+        "description": "Submit the verification vote"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the unsure vote is recorded"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no fixed or not fixed verdict is shown"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC018",
+    "title": "Show the triage queue for issues needing action",
+    "description": "A mock officer can review the triage queue and see issues available for assignment and progress.",
+    "category": "Officer Triage and Status Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /officer/queue"
+      },
+      {
+        "type": "action",
+        "description": "Review the triage queue"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify issues needing action are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the queue includes assignable items"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC019",
+    "title": "Browse transparency scorecards and issue metrics",
+    "description": "A public visitor can inspect the transparency portal and view ward or department scorecards, including SLA and backlog-style metrics.",
+    "category": "transparency",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /transparency"
+      },
+      {
+        "type": "action",
+        "description": "Open the scorecards or metrics view"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify scorecard metrics are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify SLA or issue-breach information is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC020",
+    "title": "Review ward and department performance snapshots",
+    "description": "A public visitor can inspect scorecards that summarize ward or department performance, including SLA compliance and resolution timing.",
+    "category": "Review Public Transparency Map and Scorecards",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /transparency"
+      },
+      {
+        "type": "action",
+        "description": "Open the ward or department scorecards section"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify performance scorecards are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify SLA compliance and median resolution time are shown"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC021",
+    "title": "Inspect SLA breaches and forgotten issues",
+    "description": "A public visitor can review the breach wall and open older neglected issues to understand the most overdue public items.",
+    "category": "Review Public Transparency Map and Scorecards",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /transparency"
+      },
+      {
+        "type": "action",
+        "description": "Open the SLA breach wall or forgotten issues section"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify overdue public issues are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the oldest or most neglected items are visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC022",
+    "title": "Prevent self-supporting the same issue",
+    "description": "A citizen cannot support their own issue report and sees a prevention message or disabled action instead.",
+    "category": "Support Nearby Existing Issue",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/report"
+      },
+      {
+        "type": "action",
+        "description": "Upload a photo for the report"
+      },
+      {
+        "type": "action",
+        "description": "Allow approximate location access"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a description of the issue"
+      },
+      {
+        "type": "action",
+        "description": "Submit the report"
+      },
+      {
+        "type": "action",
+        "description": "Open the created issue"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to support the same issue from the nearby support flow"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify self-support is prevented"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the support count does not change"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC023",
+    "title": "Prevent claiming resolution without progressing the issue",
+    "description": "A mock officer sees that an issue cannot be claimed resolved until it has been moved through the required workflow.",
+    "category": "Officer Triage and Status Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /officer/issue/1"
+      },
+      {
+        "type": "action",
+        "description": "Review the issue details"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to mark the issue as claimed resolved before progressing it"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a workflow validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the issue is not marked as claimed resolved"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC024",
+    "title": "Show validation when verifying without selecting a vote",
+    "description": "A citizen sees a validation error when trying to submit a verification vote without choosing an option.",
+    "category": "Verify Claimed Fix",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /citizen/issue/1/verify"
+      },
+      {
+        "type": "action",
+        "description": "Review the before-and-after evidence for the issue"
+      },
+      {
+        "type": "action",
+        "description": "Submit the verification vote without selecting an option"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a vote validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the vote is not recorded"
+      }
+    ],
+    "priority": "Low"
+  }
+]
