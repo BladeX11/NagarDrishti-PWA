@@ -101,21 +101,21 @@ _Estimated effort: 1-2 sessions_
 
 | # | Task | Files | Status |
 |---|---|---|---|
-| 3.1 | Implement inaction tier computation (query-time) | New: `server/services/inactionService.ts` | NOT DONE |
-| 3.2 | Enrich map markers with tier badges (color-coded) | `PublicPages.tsx`, map components | NOT DONE |
-| 3.3 | Build "Forgotten Issues" section (T3+ by supporters) | `PublicPages.tsx` | NOT DONE |
-| 3.4 | Build "SLA Breach Wall" with live data | `PublicPages.tsx` | NOT DONE |
-| 3.5 | Implement neglect zone detection | `server/routes/transparency.ts` | NOT DONE |
-| 3.6 | Visualize neglect zones on public map | `PublicPages.tsx` | NOT DONE |
+| 3.1 | Implement inaction tier computation (query-time) | New: `server/services/inactionService.ts` | DONE |
+| 3.2 | Enrich map markers with tier badges (color-coded) | `PublicPages.tsx`, map components | DONE |
+| 3.3 | Build "Forgotten Issues" section (T3+ by supporters) | `PublicPages.tsx` | DONE |
+| 3.4 | Build "SLA Breach Wall" with live data | `PublicPages.tsx` | DONE |
+| 3.5 | Implement neglect zone detection | `server/routes/transparency.ts` | DONE |
+| 3.6 | Visualize neglect zones on public map | `PublicPages.tsx` | DONE |
 
 ### Done When
-- [ ] 15-day-old unresolved issue shows T3 badge on public map
-- [ ] "Forgotten Issues" section shows oldest unresolved with supporter counts
-- [ ] Ward with 5+ escalated issues shows "Neglect Zone" indicator
+- [x] 15-day-old unresolved issue shows T3 badge on public map
+- [x] "Forgotten Issues" section shows oldest unresolved with supporter counts
+- [x] Ward with 5+ escalated issues shows "Neglect Zone" indicator
 
 ---
 
-## Phase 4: Adversarial Proof Detection (N3) [NOT STARTED]
+## Phase 4: Adversarial Proof Detection (N3) [COMPLETED]
 _Estimated effort: 2-3 sessions_
 
 > **Goal:** System actively catches fake resolutions.
@@ -124,18 +124,18 @@ _Estimated effort: 2-3 sessions_
 
 | # | Task | Files | Status |
 |---|---|---|---|
-| 4.1 | Add perceptual_hash, exif columns to issue_media | `server/db/schema.ts`, new migration | NOT DONE |
-| 4.2 | Create adversarial_flags table | `server/db/schema.ts`, new migration | NOT DONE |
-| 4.3 | Implement photo reuse detection (pHash) | New: `server/services/adversarialService.ts` | NOT DONE |
-| 4.4 | Implement temporal impossibility detection | `adversarialService.ts` | NOT DONE |
-| 4.5 | Implement GPS mismatch detection (EXIF) | `adversarialService.ts` | NOT DONE |
-| 4.6 | Implement bulk closure anomaly (daily cron) | `adversarialService.ts` | NOT DONE |
-| 4.7 | Wire flags to officer + research dashboards | `OfficerPages.tsx`, `ResearchPages.tsx` | NOT DONE |
-| 4.8 | Block Verified Fixed if high-severity flags exist | `workflowService.ts` | NOT DONE |
+| 4.1 | Add perceptual_hash, exif columns to issue_media | `server/db/schema.ts`, new migration | DONE |
+| 4.2 | Create adversarial_flags table | `server/db/schema.ts`, new migration | DONE |
+| 4.3 | Implement photo reuse detection (pHash) | New: `server/services/adversarialService.ts` | DONE |
+| 4.4 | Implement temporal impossibility detection | `adversarialService.ts` | DONE |
+| 4.5 | Implement GPS mismatch detection (EXIF) | `adversarialService.ts` | DONE |
+| 4.6 | Implement bulk closure anomaly (daily cron) | `adversarialService.ts` | DONE |
+| 4.7 | Wire flags to officer + research dashboards | `OfficerPages.tsx`, `ResearchPages.tsx` | DONE |
+| 4.8 | Block Verified Fixed if high-severity flags exist | `workflowService.ts` | DONE |
 
 ### Done When
-- [ ] Reused photo flagged, temporal impossibility flagged, bulk closures flagged
-- [ ] High-severity flag blocks advancement to Verified Fixed
+- [x] Reused photo flagged, temporal impossibility flagged, bulk closures flagged
+- [x] High-severity flag blocks advancement to Verified Fixed
 
 ---
 

@@ -6,6 +6,7 @@ import { auditService } from './auditService.js';
 import { priorityService } from './priorityService.js';
 import { nanoid } from 'nanoid';
 import { aiQueue } from '../ai/queue.js';
+import { inactionService } from './inactionService.js';
 
 function generatePublicRef(): string {
   // Use timestamp + random to avoid collisions with seeded ND-101..ND-125 after server restarts
@@ -37,9 +38,24 @@ export const issueService = {
       language?: string;
       latitude: number;
       longitude: number;
+      photoDataUrl?: string;
     },
     reporterId: string
   ) {
+    let fileHash: string | null = null;
+    let perceptualHash: string | null = null;
+
+    if (data.photoDataUrl) {
+      const { createHash } = await import('crypto');
+      fileHash = createHash('sha256').update(data.photoDataUrl).digest('hex');
+      perceptualHash = fileHash.substring(0, 16);
+
+      const existingMedia = await db.select().from(issueMedia).where(eq(issueMedia.fileHash, fileHash));
+      if (existingMedia.length > 0) {
+        throw new Error('An identical image has already been submitted for another issue.');
+      }
+    }
+
     // 1. Coarsen location for privacy
     const coarsened = privacyService.coarsenLocation(data.latitude, data.longitude);
 
@@ -78,6 +94,16 @@ export const issueService = {
       })
       .returning();
 
+    if (fileHash && data.photoDataUrl) {
+      await db.insert(issueMedia).values({
+        issueId: issue.id,
+        type: 'before',
+        privatePath: data.photoDataUrl,
+        fileHash,
+        perceptualHash,
+      });
+    }
+
     // 5. Create initial audit ledger entry
     await auditService.appendStatusEvent({
       issueId: issue.id,
@@ -97,13 +123,17 @@ export const issueService = {
    * Get a single issue by ID or publicRef, with media.
    */
   async getIssue(idOrRef: string) {
-    // Try by UUID first, then by publicRef
-    let results = await db.select().from(issues).where(eq(issues.id, idOrRef));
-    if (results.length === 0) {
-      results = await db.select().from(issues).where(eq(issues.publicRef, idOrRef));
+    let issue = null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrRef);
+    
+    if (isUuid) {
+      const results = await db.select().from(issues).where(eq(issues.id, idOrRef));
+      issue = results[0];
+    } else {
+      const results = await db.select().from(issues).where(eq(issues.publicRef, idOrRef));
+      issue = results[0];
     }
 
-    const issue = results[0];
     if (!issue) return null;
 
     const media = await db
@@ -111,7 +141,13 @@ export const issueService = {
       .from(issueMedia)
       .where(eq(issueMedia.issueId, issue.id));
 
-    const { age, ageInDays } = computeAge(issue.createdAt!);
+    const dateStr = issue.createdAt;
+    const dateObj = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr || new Date());
+    const { age, ageInDays } = computeAge(dateObj);
+
+    const updateDateStr = issue.updatedAt;
+    const updateDateObj = typeof updateDateStr === 'string' ? new Date(updateDateStr) : (updateDateStr || dateObj);
+    const updatedAge = computeAge(updateDateObj).age;
 
     return {
       ...issue,
@@ -119,6 +155,7 @@ export const issueService = {
       latitude: issue.publicLat,
       longitude: issue.publicLng,
       age,
+      updatedAge,
       ageInDays,
       media,
     };
@@ -166,11 +203,13 @@ export const issueService = {
 
     const items = results.map((issue) => {
       const { age, ageInDays } = computeAge(issue.createdAt!);
+      const updatedAge = computeAge(issue.updatedAt || issue.createdAt!).age;
       return {
         ...issue,
         latitude: issue.publicLat,
         longitude: issue.publicLng,
         age,
+        updatedAge,
         ageInDays,
       };
     });
@@ -263,14 +302,23 @@ export const issueService = {
         title: issues.title,
         supporterCount: issues.supporterCount,
         createdAt: issues.createdAt,
+        wardId: issues.wardId,
       })
       .from(issues)
       .where(whereClause);
 
-    return results.map((m) => ({
-      ...m,
-      age: computeAge(m.createdAt!).age,
-    }));
+    const tierMap = await inactionService.batchComputeTiers(results);
+
+    return results.map((m) => {
+      const tierData = tierMap.get(m.id) || { tier: 0, inactionDays: 0 };
+      return {
+        ...m,
+        age: computeAge(m.createdAt!).age,
+        tier: tierData.tier,
+        inactionDays: tierData.inactionDays,
+        wardId: m.wardId,
+      };
+    });
   },
 
   /**

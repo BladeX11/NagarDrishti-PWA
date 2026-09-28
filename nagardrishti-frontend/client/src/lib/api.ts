@@ -98,6 +98,7 @@ export interface CreateIssuePayload {
   language?: string;
   latitude: number;
   longitude: number;
+  photoDataUrl?: string;
 }
 
 export const issuesApi = {
@@ -184,7 +185,13 @@ export interface MapMarker {
   supporterCount: number;
   createdAt: string;
   age: string;
+  tier?: 0 | 1 | 2 | 3 | 4;
+  inactionDays?: number;
+  wardId?: string | null;
 }
+
+export const TIER_LABELS = ['Normal', 'Highlighted', 'Escalated', 'Amplified', 'Critical'] as const;
+export const TIER_COLORS = ['#4F5B2A', '#B8892D', '#C0621A', '#B22222', '#8B0000'] as const;
 
 export const mapApi = {
   getMarkers(params?: { status?: string; category?: string; wardId?: string }) {
@@ -218,6 +225,9 @@ export const transparencyApi = {
   },
   getForgottenIssues() {
     return request<ApiIssue[]>('/transparency/forgotten');
+  },
+  getNeglectZones() {
+    return request<{ wardIds: string[]; wardNames: Record<string, string> }>('/transparency/neglect-zones');
   },
 };
 
@@ -271,6 +281,31 @@ export const researchApi = {
   },
   getAIMetadata() {
     return request<unknown>('/research/ai/metadata');
+  },
+};
+
+// ── Adversarial Flags ────────────────────────────────────────────────────────
+
+export interface AdversarialFlag {
+  id: string;
+  issueId: string;
+  rule: 'PHOTO_REUSE' | 'TEMPORAL' | 'GPS_MISMATCH' | 'BULK_CLOSURE';
+  severity: 'low' | 'medium' | 'high';
+  details: Record<string, unknown>;
+  resolvedAt: string | null;
+  modelVersion: string;
+  createdAt: string;
+}
+
+export const adversarialApi = {
+  getFlags(issueId: string) {
+    return request<AdversarialFlag[]>(`/officer/issues/${issueId}/flags`);
+  },
+  resolveFlag(flagId: string, resolution: string) {
+    return request(`/officer/flags/${flagId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ resolution }),
+    });
   },
 };
 

@@ -86,6 +86,9 @@ export const issueMedia = pgTable('issue_media', {
   privatePath: text('private_path').notNull(),
   publicPath: text('public_path'),
   fileHash: text('file_hash').notNull(),
+  perceptualHash: text('perceptual_hash'),
+  exifLat: doublePrecision('exif_lat'),
+  exifLng: doublePrecision('exif_lng'),
   capturedAt: timestamp('captured_at'),
   fileSize: integer('file_size'),
   mimeType: text('mime_type'),
@@ -95,6 +98,7 @@ export const issueMedia = pgTable('issue_media', {
   return {
     issueIdx: index('idx_issue_media_issue_id').on(table.issueId),
     hashIdx: index('idx_issue_media_file_hash').on(table.fileHash),
+    phashIdx: index('idx_issue_media_phash').on(table.perceptualHash),
   };
 });
 
@@ -140,6 +144,24 @@ export const issueDuplicates = pgTable('issue_duplicates', {
     issueAIdx: index('idx_issue_duplicates_issue_a').on(table.issueAId),
     issueBIdx: index('idx_issue_duplicates_issue_b').on(table.issueBId),
     statusIdx: index('idx_issue_duplicates_status').on(table.status),
+  };
+});
+
+export const adversarialFlags = pgTable('adversarial_flags', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  issueId: uuid('issue_id').references(() => issues.id),
+  rule: text('rule').notNull(), // 'PHOTO_REUSE' | 'TEMPORAL' | 'GPS_MISMATCH' | 'BULK_CLOSURE'
+  severity: text('severity').notNull(), // 'low' | 'medium' | 'high'
+  details: jsonb('details').notNull(), // structured payload
+  resolvedAt: timestamp('resolved_at'),
+  resolvedBy: uuid('resolved_by').references(() => users.id),
+  resolution: text('resolution'), // 'dismissed' | 'confirmed_fraud' | 'false_positive'
+  modelVersion: text('model_version').notNull().default('adversarial-rules-v1.0'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+  return {
+    issueIdx: index('idx_adversarial_flags_issue_id').on(table.issueId),
+    ruleIdx: index('idx_adversarial_flags_rule').on(table.rule),
   };
 });
 

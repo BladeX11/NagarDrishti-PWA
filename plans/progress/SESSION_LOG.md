@@ -198,3 +198,67 @@
 - nagardrishti-frontend/client/src/lib/api.ts
 - nagardrishti-frontend/server/routes/audit.ts
 - plans/05-implementation-roadmap.md
+
+---
+
+## Session: 2026-09-27 (Phase 3: Inaction Amplification Engine)
+**Phase:** Phase 3 (Inaction Amplification + Public Transparency)
+**Completed:** 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 (Phase 3 is now 100% DONE)
+**In Progress:** None
+**Blocked:** None
+**Key Decisions:**
+- Tiers are strictly computed at query-time based on `status_events` to preserve database integrity and avoid desynchronization.
+- We used a batch querying approach in `inactionService.ts` to prevent N+1 query performance problems when generating the map markers.
+- Only strict forward transitions (e.g., Open -> Triaged) reset the inaction clock.
+- Created `/api/transparency/neglect-zones` to compute wards failing SLA dynamically.
+- T4 Critical issues receive a CSS-based red pulsing outline on the map.
+**Next Session Should:** Start Phase 4: Adversarial Proof Detection (N3).
+**Files Changed:**
+- `nagardrishti-frontend/server/services/inactionService.ts` (created)
+- `nagardrishti-frontend/server/services/issueService.ts`
+- `nagardrishti-frontend/server/services/scorecardService.ts`
+- `nagardrishti-frontend/server/routes/transparency.ts`
+- `nagardrishti-frontend/client/src/lib/api.ts`
+- `nagardrishti-frontend/client/src/index.css`
+- `nagardrishti-frontend/client/src/components/shared/MapView.tsx`
+- `nagardrishti-frontend/client/src/pages/transparency/PublicPages.tsx`
+- `nagardrishti-frontend/tests/inactionService.test.ts` (created)
+- `plans/05-implementation-roadmap.md`
+
+---
+
+## Session: 2026-09-28 (Phase 4: Adversarial Proof Detection)
+**Phase:** Phase 4 (Adversarial Proof Detection)
+**Completed:** 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8 (Phase 4 is now 100% DONE)
+**In Progress:** None
+**Blocked:** None
+**Key Decisions:**
+- Adversarial rules run asynchronously when a proof is submitted (`PHOTO_REUSE`, `TEMPORAL`, `GPS_MISMATCH`).
+- Computed `hammingDistance` and `haversineDistance` using pure JS functions to minimize heavy dependencies.
+- `BULK_CLOSURE` rule implemented as a cron task executing every 24h against a 30-day baseline of closure statistics for an officer.
+- Added `exifLat`, `exifLng` and `perceptualHash` schema changes.
+- UI panel added to `OfficerIssueDetail` for viewing and dismissing adversarial flags.
+- Strict block on advancing issues to `Verified Fixed` if any active high-severity flags exist.
+**Next Session Should:** Start Phase 5: Equity Analysis (N1) + Cascade Detection (N4).
+**Files Changed:**
+- `nagardrishti-frontend/server/db/schema.ts`
+- `nagardrishti-frontend/server/services/adversarialService.ts` (created)
+- `nagardrishti-frontend/server/routes/issues.ts`
+- `nagardrishti-frontend/server/services/workflowService.ts`
+- `nagardrishti-frontend/server/routes/officer.ts` (created)
+- `nagardrishti-frontend/server/routes/index.ts`
+- `nagardrishti-frontend/server/index.ts`
+- `nagardrishti-frontend/client/src/lib/api.ts`
+- `nagardrishti-frontend/client/src/pages/officer/OfficerPages.tsx`
+- `plans/05-implementation-roadmap.md`
+
+ # #   S e s s i o n :   2 0 2 6 - 0 9 - 2 8 
+ * * P h a s e : * *   3 
+ * * C o m p l e t e d : * *   F i x e d   i s s u e   d u p l i c a t e   p h o t o   d e t e c t i o n ,   f i x e d   5 0 0   e r r o r   w h e n   q u e r y i n g   i s s u e   d e t a i l   b y   a d d i n g   m i s s i n g   d a t a b a s e   c o l u m n s ,   a n d   a d d e d   u p d a t e d A g e   t i m e   d i s p l a y   l o g i c   t o   i s s u e s . 
+ * * I n   P r o g r e s s : * * 
+ * * B l o c k e d : * *   
+ * * K e y   D e c i s i o n s : * *   U s e d   d i r e c t   A L T E R   T A B L E   q u e r y   v i a   t s x   t o   s a f e l y   u p d a t e   s c h e m a   w i t h o u t   T T Y   p r o m p t   i s s u e s . 
+ * * N e x t   S e s s i o n   S h o u l d : * *   S t a r t   w o r k i n g   o n   v e r i f i c a t i o n   f e a t u r e s   o r   t h e   n e x t   p i p e l i n e   s t e p . 
+ * * F i l e s   C h a n g e d : * *   s e r v e r / s e r v i c e s / i s s u e S e r v i c e . t s ,   s e r v e r / r o u t e s / i s s u e s . t s ,   c l i e n t / s r c / p a g e s / c i t i z e n / C i t i z e n P a g e s . t s x ,   a d d _ c o l u m n s . t s 
+  
+ 
