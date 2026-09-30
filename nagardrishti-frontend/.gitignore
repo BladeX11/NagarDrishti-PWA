@@ -113,3 +113,6 @@ client/public/__manus__/version.json
 .project-config.json
 testsprite_tests/tmp/
 testsprite_tests/tmp/config.json
+
+# Uploaded files
+uploads/

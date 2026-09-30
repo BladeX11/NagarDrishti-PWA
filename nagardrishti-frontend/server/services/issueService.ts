@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { issues, issueMedia, issueSupporters } from '../db/schema.js';
+import { issues, issueMedia, issueSupporters, verificationVotes, statusEvents } from '../db/schema.js';
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { privacyService } from './privacyService.js';
 import { auditService } from './auditService.js';
@@ -44,15 +44,39 @@ export const issueService = {
   ) {
     let fileHash: string | null = null;
     let perceptualHash: string | null = null;
+    let storedMediaPath: string | null = null;
+    let mimeType: string | null = null;
+    let fileSize: number | null = null;
 
     if (data.photoDataUrl) {
       const { createHash } = await import('crypto');
-      fileHash = createHash('sha256').update(data.photoDataUrl).digest('hex');
-      perceptualHash = fileHash.substring(0, 16);
+      const fs = await import('fs/promises');
+      const path = await import('path');
 
-      const existingMedia = await db.select().from(issueMedia).where(eq(issueMedia.fileHash, fileHash));
-      if (existingMedia.length > 0) {
-        throw new Error('An identical image has already been submitted for another issue.');
+      const matches = data.photoDataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+        fileSize = buffer.length;
+        fileHash = createHash('sha256').update(buffer).digest('hex');
+        perceptualHash = fileHash.substring(0, 16);
+
+        const existingMedia = await db.select().from(issueMedia).where(eq(issueMedia.fileHash, fileHash));
+        if (existingMedia.length > 0) {
+          throw new Error('An identical image has already been submitted for another issue.');
+        }
+
+        const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+        const filename = `${nanoid(12)}_${Date.now()}.${ext}`;
+        const issueUploadsDir = path.resolve(process.cwd(), 'uploads', 'issues');
+        await fs.mkdir(issueUploadsDir, { recursive: true });
+        await fs.writeFile(path.join(issueUploadsDir, filename), buffer);
+
+        storedMediaPath = `/uploads/issues/${filename}`;
+      } else {
+        fileHash = createHash('sha256').update(data.photoDataUrl).digest('hex');
+        perceptualHash = fileHash.substring(0, 16);
+        storedMediaPath = data.photoDataUrl;
       }
     }
 
@@ -94,13 +118,16 @@ export const issueService = {
       })
       .returning();
 
-    if (fileHash && data.photoDataUrl) {
+    if (fileHash && storedMediaPath) {
       await db.insert(issueMedia).values({
         issueId: issue.id,
         type: 'before',
-        privatePath: data.photoDataUrl,
+        privatePath: storedMediaPath,
+        publicPath: storedMediaPath,
         fileHash,
         perceptualHash,
+        fileSize: fileSize ?? undefined,
+        mimeType: mimeType ?? undefined,
       });
     }
 
@@ -149,6 +176,46 @@ export const issueService = {
     const updateDateObj = typeof updateDateStr === 'string' ? new Date(updateDateStr) : (updateDateStr || dateObj);
     const updatedAge = computeAge(updateDateObj).age;
 
+    // Fetch verification votes
+    let fixedVotes = 0;
+    let notFixedVotes = 0;
+    let unsureVotes = 0;
+    let totalVotes = 0;
+    try {
+      const votes = await db
+        .select()
+        .from(verificationVotes)
+        .where(eq(verificationVotes.issueId, issue.id));
+      fixedVotes = votes.filter((v) => v.vote === 'fixed').length;
+      notFixedVotes = votes.filter((v) => v.vote === 'not_fixed').length;
+      unsureVotes = votes.filter((v) => v.vote === 'unsure').length;
+      totalVotes = votes.length;
+    } catch {
+      // Fallback if table not ready
+    }
+
+    // Fetch status events for timeline
+    let formattedEvents: any[] = [];
+    try {
+      const eventsList = await db
+        .select()
+        .from(statusEvents)
+        .where(eq(statusEvents.issueId, issue.id))
+        .orderBy(statusEvents.sequenceNum);
+      formattedEvents = eventsList.map((e) => ({
+        id: e.id,
+        issueId: e.issueId,
+        fromStatus: e.fromStatus,
+        toStatus: e.toStatus,
+        actor: e.actorId === issue.reporterId ? 'Citizen' : e.actorRole === 'system' ? 'System AI' : 'Officer',
+        actorRole: e.actorRole,
+        timestamp: (e.createdAt ?? new Date()).toISOString(),
+        reason: e.reason,
+      }));
+    } catch {
+      // Fallback
+    }
+
     return {
       ...issue,
       // Public location (coarsened)
@@ -158,6 +225,13 @@ export const issueService = {
       updatedAge,
       ageInDays,
       media,
+      verificationVotes: {
+        fixed: fixedVotes,
+        notFixed: notFixedVotes,
+        unsure: unsureVotes,
+        total: totalVotes,
+      },
+      events: formattedEvents,
     };
   },
 

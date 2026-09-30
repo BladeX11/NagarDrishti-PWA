@@ -252,13 +252,47 @@
 - `nagardrishti-frontend/client/src/pages/officer/OfficerPages.tsx`
 - `plans/05-implementation-roadmap.md`
 
- # #   S e s s i o n :   2 0 2 6 - 0 9 - 2 8 
- * * P h a s e : * *   3 
- * * C o m p l e t e d : * *   F i x e d   i s s u e   d u p l i c a t e   p h o t o   d e t e c t i o n ,   f i x e d   5 0 0   e r r o r   w h e n   q u e r y i n g   i s s u e   d e t a i l   b y   a d d i n g   m i s s i n g   d a t a b a s e   c o l u m n s ,   a n d   a d d e d   u p d a t e d A g e   t i m e   d i s p l a y   l o g i c   t o   i s s u e s . 
- * * I n   P r o g r e s s : * * 
- * * B l o c k e d : * *   
- * * K e y   D e c i s i o n s : * *   U s e d   d i r e c t   A L T E R   T A B L E   q u e r y   v i a   t s x   t o   s a f e l y   u p d a t e   s c h e m a   w i t h o u t   T T Y   p r o m p t   i s s u e s . 
- * * N e x t   S e s s i o n   S h o u l d : * *   S t a r t   w o r k i n g   o n   v e r i f i c a t i o n   f e a t u r e s   o r   t h e   n e x t   p i p e l i n e   s t e p . 
- * * F i l e s   C h a n g e d : * *   s e r v e r / s e r v i c e s / i s s u e S e r v i c e . t s ,   s e r v e r / r o u t e s / i s s u e s . t s ,   c l i e n t / s r c / p a g e s / c i t i z e n / C i t i z e n P a g e s . t s x ,   a d d _ c o l u m n s . t s 
-  
- 
+---
+
+## Session: 2026-09-28 (Schema Synchronizations & Bug Fixes)
+**Phase:** Phase 4 (Adversarial Detection & Schema)
+**Completed:**
+- Fixed duplicate photo detection and added missing columns to PostgreSQL issue_media table.
+- Added updatedAge time display logic to issues.
+**In Progress:** None
+**Blocked:** None
+**Key Decisions:**
+- Added missing columns via direct ALTER TABLE queries to prevent 500 errors.
+**Next Session Should:** Clean database and optimize media pipeline.
+**Files Changed:**
+- `nagardrishti-frontend/server/services/issueService.ts`
+- `nagardrishti-frontend/server/routes/issues.ts`
+- `nagardrishti-frontend/client/src/pages/citizen/CitizenPages.tsx`
+- `nagardrishti-frontend/add_columns.ts`
+
+---
+
+## Session: 2026-10-01 (Database Cleansing, Media Optimization & Issue Detail Fixes)
+**Phase:** Maintenance & Performance Optimization
+**Completed:**
+- Created database cleanup script `clearUserIssues.ts` (`npm run db:clear-user-issues`) to delete user-registered issues while preserving default seed records.
+- Implemented client-side Canvas image compression (max 1280px, 0.75 quality) reducing photo uploads by ~90-95%.
+- Migrated issue media storage from PostgreSQL inline base64 to server filesystem (`uploads/issues/`), served via Express static route and proxied through Vite.
+- Synchronized missing database columns (`perceptual_hash`, `exif_lat`, `exif_lng`, `public_path`, etc.) and `adversarial_flags` table via `add_columns.ts`.
+- Fixed blank screen / not found bug in `CitizenIssueDetail` by safely populating `verificationVotes` and `events` in `issueService.getIssue` with defensive UI fallbacks.
+**In Progress:** None
+**Blocked:** None
+**Key Decisions:**
+- Saved media to `uploads/issues/` instead of storing heavy base64 strings in PostgreSQL.
+- Handled missing `verificationVotes` gracefully both on server and frontend.
+**Next Session Should:** Proceed to Phase 5 (Ward Equity Analysis N1 & Cascade Detection N4).
+**Files Changed:**
+- `nagardrishti-frontend/server/db/clearUserIssues.ts` (created)
+- `nagardrishti-frontend/server/services/issueService.ts`
+- `nagardrishti-frontend/client/src/pages/citizen/CitizenPages.tsx`
+- `nagardrishti-frontend/server/app.ts`
+- `nagardrishti-frontend/vite.config.ts`
+- `nagardrishti-frontend/add_columns.ts`
+- `nagardrishti-frontend/.gitignore`
+- `nagardrishti-frontend/package.json`
+- `MISTAKES.md`

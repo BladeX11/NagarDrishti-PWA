@@ -17,11 +17,17 @@ export function createApp(): Express {
   const app = express();
 
   // Security Middleware
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
   app.use(cors({
     origin: ['http://localhost:3000', 'http://localhost:5173'],
     credentials: true,
   }));
+
+  // Serve uploaded media files
+  const uploadsDir = path.resolve(process.cwd(), 'uploads');
+  app.use('/uploads', express.static(uploadsDir));
 
   // Body Parsing Middleware
   app.use(express.json({ limit: '10mb' }));
