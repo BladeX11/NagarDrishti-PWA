@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TrendingUp, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { AppBar } from '../components/AppBar';
 import { IssueCard } from '../components/IssueCard';
 import type { Issue } from '../types';
+import { listIssues } from '../api';
 
 // --- Mock seed data (labelled as demo/synthetic per PRD) ---
 const MOCK_ISSUES: Issue[] = [
@@ -77,8 +78,22 @@ const FILTER_TABS = ['All', 'Open', 'In Progress', 'Resolved'];
 
 export function HomePage() {
   const [activeFilter, setActiveFilter] = useState('All');
+  const [issues, setIssues] = useState<Issue[]>(MOCK_ISSUES);
+  const [isLive, setIsLive] = useState(false);
 
-  const filteredIssues = MOCK_ISSUES.filter(issue => {
+  useEffect(() => {
+    let active = true;
+    listIssues().then((liveIssues) => {
+      if (!active) return;
+      setIssues(liveIssues);
+      setIsLive(true);
+    }).catch(() => {
+      if (active) setIsLive(false);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const filteredIssues = issues.filter(issue => {
     if (activeFilter === 'All') return true;
     if (activeFilter === 'Open') return issue.status === 'open';
     if (activeFilter === 'In Progress') return issue.status === 'in_progress' || issue.status === 'assigned' || issue.status === 'triaged';
@@ -88,10 +103,10 @@ export function HomePage() {
 
   // Quick stats
   const stats = {
-    open:     MOCK_ISSUES.filter(i => i.status === 'open').length,
-    progress: MOCK_ISSUES.filter(i => ['triaged','assigned','in_progress'].includes(i.status)).length,
-    resolved: MOCK_ISSUES.filter(i => ['verified_fixed','claimed_resolved'].includes(i.status)).length,
-    breached: MOCK_ISSUES.filter(i => i.age_days > 10 && !['verified_fixed','rejected','duplicate_merged'].includes(i.status)).length,
+    open:     issues.filter(i => i.status === 'open').length,
+    progress: issues.filter(i => ['triaged','assigned','in_progress'].includes(i.status)).length,
+    resolved: issues.filter(i => ['verified_fixed','claimed_resolved'].includes(i.status)).length,
+    breached: issues.filter(i => i.age_days > 10 && !['verified_fixed','rejected','duplicate_merged'].includes(i.status)).length,
   };
 
   return (
@@ -206,7 +221,7 @@ export function HomePage() {
       <section aria-label="Nearby civic issues" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {/* Demo data label — required by PRD */}
         <p className="text-label" style={{ color: '#9a8e7a', fontSize: '0.6rem' }} role="note">
-          Demo data — synthetic records for prototype
+          {isLive ? 'Live backend data' : 'Demo data — start PostgreSQL for live records'}
         </p>
 
         {filteredIssues.length === 0 ? (

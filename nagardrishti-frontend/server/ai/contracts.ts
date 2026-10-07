@@ -2,8 +2,9 @@ import type { Category, IssueStatus } from '../../shared/types.js';
 
 export const AI_VERSION = 'civictrust-0.1.0';
 export const AI_DATA_VERSION = 'seed-v1';
+export const CALIBRATION_VERSION = 'civictrust-cal-v1';
 
-export type AIPredictionStatus = 'pending' | 'accepted' | 'corrected' | 'rejected';
+export type AIPredictionStatus = 'pending' | 'needs_review' | 'accepted' | 'corrected' | 'rejected';
 export type AIModule = 'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'M6' | 'M7';
 
 export interface PredictionExplanation {
@@ -21,6 +22,10 @@ export interface Prediction<T = unknown> {
   modelVersion: string;
   dataVersion: string;
   status: AIPredictionStatus;
+  rawConfidence?: number;
+  calibratedConfidence?: number;
+  abstained?: boolean;
+  abstentionReason?: string;
 }
 
 export interface IssueInferenceContext {

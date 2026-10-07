@@ -25,10 +25,12 @@ const SLABreachWall=lazy(()=>import('./pages/transparency/PublicPages').then(m=>
 const ForgottenIssues=lazy(()=>import('./pages/transparency/PublicPages').then(m=>({default:m.ForgottenIssues})));
 const PublicIssueDetail=lazy(()=>import('./pages/transparency/PublicPages').then(m=>({default:m.PublicIssueDetail})));
 const ResearchOverview=lazy(()=>import('./pages/research/ResearchPages').then(m=>({default:m.ResearchOverview})));
+const AnnotationWorkspace=lazy(()=>import('./pages/research/AnnotationWorkspace').then(m=>({default:m.AnnotationWorkspace})));
 const ModelPredictions=lazy(()=>import('./pages/research/ResearchPages').then(m=>({default:m.ModelPredictions})));
 const DuplicateAnalysis=lazy(()=>import('./pages/research/ResearchPages').then(m=>({default:m.DuplicateAnalysis})));
 const ProofAudit=lazy(()=>import('./pages/research/ResearchPages').then(m=>({default:m.ProofAudit})));
 const ExperimentMetrics=lazy(()=>import('./pages/research/ResearchPages').then(m=>({default:m.ExperimentMetrics})));
+const LiveEvaluationMetrics=lazy(()=>import('./pages/research/EvaluationMetrics').then(m=>({default:m.EvaluationMetrics})));
 const AuditLedger=lazy(()=>import('./pages/research/ResearchPages').then(m=>({default:m.AuditLedger})));
 
 function Loading(){return <div className="flex min-h-[50vh] items-center justify-center bg-[#F5EFE3] text-[#2A3320]"><span className="border-4 border-[#2A3320] bg-[#D8C9A8] px-5 py-4 text-[10px] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#2A3320]">Opening dashboard…</span></div>}
@@ -39,6 +41,6 @@ export default function App(){return <BrowserRouter><Toaster position="bottom-ri
   <Route path="/citizen" element={<CitizenLayout/>}><Route index element={<CitizenHome/>}/><Route path="explore" element={<ExploreMap/>}/><Route path="report" element={<ReportFlow/>}/><Route path="my-reports" element={<MyReports/>}/><Route path="issue/:id/verify" element={<VerificationVote/>}/><Route path="issue/:id" element={<CitizenIssueDetail/>}/><Route path="notifications" element={<Notifications/>}/><Route path="settings" element={<Settings/>}/></Route>
   <Route path="/officer" element={<OfficerLayout/>}><Route index element={<OfficerOverview/>}/><Route path="queue" element={<TriageQueue/>}/><Route path="issue/:id/proof" element={<ProofReview/>}/><Route path="issue/:id" element={<OfficerIssueDetail/>}/></Route>
   <Route path="/transparency" element={<PublicLayout/>}><Route index element={<PublicMap/>}/><Route path="scorecards" element={<Scorecards/>}/><Route path="sla-breaches" element={<SLABreachWall/>}/><Route path="forgotten" element={<ForgottenIssues/>}/><Route path="issue/:id" element={<PublicIssueDetail/>}/></Route>
-  <Route path="/research" element={<ResearchLayout/>}><Route index element={<ResearchOverview/>}/><Route path="models" element={<ModelPredictions/>}/><Route path="duplicates" element={<DuplicateAnalysis/>}/><Route path="proof-audit" element={<ProofAudit/>}/><Route path="metrics" element={<ExperimentMetrics/>}/><Route path="audit-ledger" element={<AuditLedger/>}/></Route>
+  <Route path="/research" element={<ResearchLayout/>}><Route index element={<ResearchOverview/>}/><Route path="annotation" element={<AnnotationWorkspace/>}/><Route path="models" element={<ModelPredictions/>}/><Route path="duplicates" element={<DuplicateAnalysis/>}/><Route path="proof-audit" element={<ProofAudit/>}/><Route path="metrics" element={<LiveEvaluationMetrics/>}/><Route path="audit-ledger" element={<AuditLedger/>}/></Route>
   <Route path="/dashboard" element={<Navigate to="/citizen" replace/>}/><Route path="*" element={<NotFound/>}/>
 </Routes></Suspense></BrowserRouter>}

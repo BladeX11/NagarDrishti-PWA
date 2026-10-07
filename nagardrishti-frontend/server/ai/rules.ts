@@ -66,16 +66,15 @@ export function predictPriority(context: IssueInferenceContext): Prediction<{ ba
   };
 }
 
-export function scoreDuplicate(context: IssueInferenceContext, candidate: IssueInferenceContext & { publicRef: string }): DuplicateCandidate {
-  const distanceMetres = candidate.latitude === context.latitude && candidate.longitude === context.longitude ? 0 : 1;
+export function scoreDuplicate(context: IssueInferenceContext, candidate: IssueInferenceContext & { publicRef: string }, distanceMetres: number): DuplicateCandidate {
   const textSimilarity = jaccardSimilarity(`${context.title} ${context.description}`, `${candidate.title} ${candidate.description}`);
   const categoryMatch = context.category === candidate.category;
-  const spatialSignal = distanceMetres === 0 ? 1 : 0;
+  const spatialSignal = Math.exp(-distanceMetres / 500);
   const score = clamp(spatialSignal * 0.45 + textSimilarity * 0.35 + (categoryMatch ? 0.2 : 0));
   const reasons = [
     categoryMatch ? 'same category' : 'different category',
     textSimilarity > 0.2 ? 'similar description terms' : 'weak text overlap',
-    spatialSignal ? 'same coordinate in demo fixture' : 'candidate requires geospatial distance check',
+    `within ${Math.round(distanceMetres)}m spatial radius`,
   ];
   return { issueId: candidate.issueId, publicRef: candidate.publicRef, distanceMetres, textSimilarity, categoryMatch, score, reasons };
 }

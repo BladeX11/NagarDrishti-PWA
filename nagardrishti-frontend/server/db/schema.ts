@@ -143,6 +143,29 @@ export const issueDuplicates = pgTable('issue_duplicates', {
   };
 });
 
+export const issueGraphEdges = pgTable('issue_graph_edges', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  issueAId: uuid('issue_a_id').references(() => issues.id),
+  issueBId: uuid('issue_b_id').references(() => issues.id),
+  spatialDistance: doublePrecision('spatial_distance').notNull(),
+  textSimilarity: doublePrecision('text_similarity').notNull(),
+  categoryMatch: boolean('category_match').notNull(),
+  temporalSimilarity: doublePrecision('temporal_similarity').notNull(),
+  edgeScore: doublePrecision('edge_score').notNull(),
+  edgeType: text('edge_type').notNull(), // duplicate|related
+  status: text('status').default('pending'),
+  modelVersion: text('model_version').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+  return {
+    issuePairUnq: unique().on(table.issueAId, table.issueBId),
+    issueAIdx: index('idx_issue_graph_edges_issue_a').on(table.issueAId),
+    issueBIdx: index('idx_issue_graph_edges_issue_b').on(table.issueBId),
+    scoreIdx: index('idx_issue_graph_edges_score').on(table.edgeScore),
+  };
+});
+
 export const statusEvents = pgTable('status_events', {
   id: uuid('id').defaultRandom().primaryKey(),
   sequenceNum: serial('sequence_num').unique(),
@@ -167,6 +190,11 @@ export const modelPredictions = pgTable('model_predictions', {
   module: text('module').notNull(), // M1|M2...
   prediction: jsonb('prediction').notNull(),
   confidence: doublePrecision('confidence').notNull(),
+  rawConfidence: doublePrecision('raw_confidence'),
+  calibratedConfidence: doublePrecision('calibrated_confidence'),
+  abstained: boolean('abstained').default(false),
+  abstentionReason: text('abstention_reason'),
+  calibrationVersion: text('calibration_version'),
   modelVersion: text('model_version').notNull(),
   dataVersion: text('data_version').notNull(),
   explanation: text('explanation'),
@@ -197,3 +225,19 @@ export const scorecardSnapshots = pgTable('scorecard_snapshots', {
   methodVersion: text('method_version').default('v1.0'),
   snapshotAt: timestamp('snapshot_at').defaultNow(),
 });
+
+export const evaluationAnnotations = pgTable('evaluation_annotations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  recordId: text('record_id').notNull(),
+  annotatorId: text('annotator_id').notNull(),
+  category: text('category').notNull(),
+  priority: integer('priority').notNull(),
+  duplicateLabel: text('duplicate_label'),
+  rationale: text('rationale'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  recordAnnotatorUnq: unique().on(table.recordId, table.annotatorId),
+  recordIdx: index('idx_evaluation_annotations_record_id').on(table.recordId),
+  annotatorIdx: index('idx_evaluation_annotations_annotator_id').on(table.annotatorId),
+}));

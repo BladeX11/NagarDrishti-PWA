@@ -4,8 +4,22 @@ import { workflowService } from '../services/workflowService.js';
 import { verificationService } from '../services/verificationService.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { aiQueue } from '../ai/queue.js';
+import multer from 'multer';
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    if (!file.mimetype.startsWith('image/')) return callback(new Error('Only image files are allowed'));
+    callback(null, true);
+  },
+});
+const uploadPhoto = (req: any, res: any, next: any) => upload.single('photo')(req, res, (error: any) => {
+  if (!error) return next();
+  if (error.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ success: false, error: 'Photo must be 15 MB or smaller' });
+  return res.status(400).json({ success: false, error: error.message || 'Photo upload failed' });
+});
 
 router.get('/', async (req, res) => {
   try {
@@ -16,9 +30,33 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', requireAuth, requireRole('citizen'), async (req, res) => {
+router.get('/mine', requireAuth, requireRole('citizen'), async (req, res) => {
   try {
-    const issue = await issueService.createIssue(req.body, req.user!.id);
+    const data = await issueService.listIssues({ ...req.query, reporterId: req.user!.id });
+    res.json({ success: true, data });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/', requireAuth, requireRole('citizen'), uploadPhoto, async (req, res) => {
+  try {
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+    if (!req.body.category || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return res.status(400).json({ success: false, error: 'Category and valid coordinates are required' });
+    }
+    const issue = await issueService.createIssue({
+      ...req.body,
+      latitude,
+      longitude,
+      photo: req.file ? {
+        buffer: req.file.buffer,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        size: req.file.size,
+      } : undefined,
+    }, req.user!.id);
     res.json({ success: true, data: issue });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -107,6 +145,24 @@ router.get('/:id/duplicates', async (req, res) => {
     const { aiOrchestrator } = await import('../ai/orchestrator.js');
     const data = await aiOrchestrator.listDuplicates();
     res.json({ success: true, data: data.filter((item) => item.issueAId === req.params.id || item.issueBId === req.params.id) });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/:id/graph', async (req, res) => {
+  try {
+    const { issueGraphService } = await import('../ai/graph.js');
+    const graph = await issueGraphService.list();
+    res.json({
+      success: true,
+      data: {
+        ...graph,
+        nodes: graph.nodes.filter((node) => node.id === req.params.id),
+        edges: graph.edges.filter((edge) => edge.issueAId === req.params.id || edge.issueBId === req.params.id),
+        clusters: graph.clusters.filter((cluster) => cluster.issueIds.includes(req.params.id)),
+      },
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

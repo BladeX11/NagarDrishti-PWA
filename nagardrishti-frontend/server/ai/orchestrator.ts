@@ -1,10 +1,12 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { issueDuplicates, issues, modelPredictions } from '../db/schema.js';
-import { AI_DATA_VERSION, AI_VERSION, type IssueInferenceContext, type IssueInferenceResult } from './contracts.js';
+import { AI_DATA_VERSION, AI_VERSION, CALIBRATION_VERSION, type IssueInferenceContext, type IssueInferenceResult } from './contracts.js';
 import type { Category } from '../../shared/types.js';
 import { predictCategory, predictDepartment, predictPriority, predictProof, scoreDuplicate } from './rules.js';
 import { haversineMetres } from './features.js';
+import { issueGraphService } from './graph.js';
+import { calibratePrediction } from './calibration.js';
 
 function toContext(issue: typeof issues.$inferSelect): IssueInferenceContext {
   return {
@@ -33,14 +35,15 @@ export const aiOrchestrator = {
       predictDepartment(context.category as Category),
       predictPriority(context),
       predictProof(context.hasProof),
-    ];
+    ].map(calibratePrediction);
 
     const candidates = await db.select().from(issues).where(and(ne(issues.id, issue.id), ne(issues.status, 'Verified Fixed')));
     const duplicateCandidates = candidates
       .filter((candidate) => haversineMetres(context.latitude, context.longitude, candidate.privateLat, candidate.privateLng) <= 1500)
       .map((candidate) => {
-        const result = scoreDuplicate(context, { ...toContext(candidate), publicRef: candidate.publicRef });
-        return { ...result, distanceMetres: haversineMetres(context.latitude, context.longitude, candidate.privateLat, candidate.privateLng) };
+        const distanceMetres = haversineMetres(context.latitude, context.longitude, candidate.privateLat, candidate.privateLng);
+        const result = scoreDuplicate(context, { ...toContext(candidate), publicRef: candidate.publicRef }, distanceMetres);
+        return { ...result, distanceMetres };
       })
       .filter((candidate) => candidate.score >= 0.35)
       .sort((left, right) => right.score - left.score)
@@ -52,6 +55,11 @@ export const aiOrchestrator = {
         module: prediction.module,
         prediction: prediction.prediction,
         confidence: prediction.confidence,
+        rawConfidence: prediction.rawConfidence,
+        calibratedConfidence: prediction.calibratedConfidence,
+        abstained: prediction.abstained,
+        abstentionReason: prediction.abstentionReason,
+        calibrationVersion: CALIBRATION_VERSION,
         modelVersion: prediction.modelVersion,
         dataVersion: prediction.dataVersion,
         explanation: prediction.explanation,
@@ -76,6 +84,8 @@ export const aiOrchestrator = {
       }
     }
 
+    await issueGraphService.rebuild();
+
     return { issueId: issue.id, predictions, duplicateCandidates, generatedAt: new Date().toISOString() };
   },
 
@@ -84,12 +94,16 @@ export const aiOrchestrator = {
     return db.select().from(modelPredictions);
   },
 
+  async listAbstentions() {
+    return db.select().from(modelPredictions).where(eq(modelPredictions.abstained, true));
+  },
+
   async listDuplicates(status?: string) {
     if (status) return db.select().from(issueDuplicates).where(eq(issueDuplicates.status, status));
     return db.select().from(issueDuplicates);
   },
 
   metadata() {
-    return { modelVersion: AI_VERSION, dataVersion: AI_DATA_VERSION, modules: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'] };
+    return { modelVersion: AI_VERSION, dataVersion: AI_DATA_VERSION, modules: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'], calibrationVersion: CALIBRATION_VERSION };
   },
 };

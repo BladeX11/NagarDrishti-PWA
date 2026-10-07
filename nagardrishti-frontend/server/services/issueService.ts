@@ -6,13 +6,12 @@ import { auditService } from './auditService.js';
 import { priorityService } from './priorityService.js';
 import { nanoid } from 'nanoid';
 import { aiQueue } from '../ai/queue.js';
-
-// Counter for public reference IDs
-let refCounter = 100;
+import { createHash } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
 function generatePublicRef(): string {
-  refCounter++;
-  return `ND-${refCounter}`;
+  return `ND-${Date.now().toString(36).toUpperCase()}-${nanoid(4).toUpperCase()}`;
 }
 
 function computeAge(createdAt: Date): { age: string; ageInDays: number } {
@@ -38,6 +37,12 @@ export const issueService = {
       language?: string;
       latitude: number;
       longitude: number;
+      photo?: {
+        buffer: Buffer;
+        originalName: string;
+        mimeType: string;
+        size: number;
+      };
     },
     reporterId: string
   ) {
@@ -89,6 +94,24 @@ export const issueService = {
       reason: 'Issue reported by citizen',
     });
 
+    if (data.photo) {
+      const fileHash = createHash('sha256').update(data.photo.buffer).digest('hex');
+      const extension = data.photo.mimeType.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'bin';
+      const uploadDirectory = path.resolve(process.cwd(), 'uploads', 'private');
+      await mkdir(uploadDirectory, { recursive: true });
+      const privatePath = path.join(uploadDirectory, `${issue.id}-${fileHash}.${extension}`);
+      await writeFile(privatePath, data.photo.buffer);
+      await db.insert(issueMedia).values({
+        issueId: issue.id,
+        type: 'before',
+        privatePath,
+        fileHash,
+        fileSize: data.photo.size,
+        mimeType: data.photo.mimeType,
+        privacyReviewed: false,
+      });
+    }
+
     void aiQueue.enqueueIssueInference(issue.id);
 
     return issue;
@@ -133,6 +156,7 @@ export const issueService = {
     category?: string;
     wardId?: string;
     departmentId?: string;
+    reporterId?: string;
     page?: number;
     limit?: number;
   }) {
@@ -146,6 +170,7 @@ export const issueService = {
     if (filters.category) conditions.push(eq(issues.category, filters.category));
     if (filters.wardId) conditions.push(eq(issues.wardId, filters.wardId));
     if (filters.departmentId) conditions.push(eq(issues.departmentId, filters.departmentId));
+    if (filters.reporterId) conditions.push(eq(issues.reporterId, filters.reporterId));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

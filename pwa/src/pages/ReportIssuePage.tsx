@@ -4,6 +4,7 @@ import { Camera, Upload, MapPin, CheckCircle2, ChevronRight, AlertCircle, Loader
 import { AppBar } from '../components/AppBar';
 import type { CategoryKey } from '../types';
 import { CATEGORY_META } from '../types';
+import { createIssue } from '../api';
 
 // Steps of the report flow
 type Step = 'photo' | 'category' | 'location' | 'review';
@@ -24,8 +25,10 @@ export function ReportIssuePage() {
   const [aiSuggestion, setAiSuggestion] = useState<CategoryKey | null>(null);
   const [description, setDescription] = useState('');
   const [locationSource, setLocationSource] = useState<'device' | 'manual' | null>(null);
+  const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const stepIndex = STEPS.findIndex(s => s.id === step);
 
@@ -39,13 +42,35 @@ export function ReportIssuePage() {
     setTimeout(() => setAiSuggestion('pothole/road'), 800);
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
+    setSubmitError(null);
+    try {
+      const category = selectedCategory ?? aiSuggestion ?? 'other';
+      const location = coordinates ?? { latitude: 18.5204, longitude: 73.8567 };
+      await createIssue({ category, description, ...location });
       setSubmitting(false);
       setSubmitted(true);
-    }, 1500);
+    } catch (error) {
+      setSubmitting(false);
+      setSubmitError(error instanceof Error ? error.message : 'Could not submit report');
+    }
+  }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setSubmitError('Location is not available on this device.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setCoordinates({ latitude: coords.latitude, longitude: coords.longitude });
+        setLocationSource('device');
+        setSubmitError(null);
+      },
+      () => setSubmitError('Location permission was not granted. You can pin the area manually.'),
+      { enableHighAccuracy: false, timeout: 10000 },
+    );
   }
 
   if (submitted) {
@@ -270,7 +295,7 @@ export function ReportIssuePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button
                 className={`btn ${locationSource === 'device' ? 'btn-primary' : 'btn-outline'} btn-full`}
-                onClick={() => setLocationSource('device')}
+                onClick={useCurrentLocation}
                 aria-pressed={locationSource === 'device'}
               >
                 <MapPin size={16} aria-hidden="true" />
@@ -278,12 +303,22 @@ export function ReportIssuePage() {
               </button>
               <button
                 className={`btn ${locationSource === 'manual' ? 'btn-accent' : 'btn-outline'} btn-full`}
-                onClick={() => setLocationSource('manual')}
+                onClick={() => {
+                  setLocationSource('manual');
+                  setCoordinates({ latitude: 18.5204, longitude: 73.8567 });
+                  setSubmitError(null);
+                }}
                 aria-pressed={locationSource === 'manual'}
               >
                 Pin on map manually
               </button>
             </div>
+
+            {submitError && (
+              <p role="alert" style={{ color: 'var(--color-danger)', fontSize: '0.8rem', fontWeight: 600 }}>
+                {submitError}
+              </p>
+            )}
 
             {/* Map pin preview */}
             {locationSource && (

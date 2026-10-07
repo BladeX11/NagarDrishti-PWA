@@ -71,6 +71,17 @@ NagarDrishti is designed as a decoupled, modular system:
 
 ## Getting Started & Engineering Standards
 
+### PWA quick start
+
+The first frontend slice lives at the repository root and uses React, Vite, Leaflet, and `vite-plugin-pwa`.
+
+```bash
+npm install
+npm run dev
+```
+
+Open the local Vite URL on a mobile-sized viewport. The current demo includes a seeded public issue map, coarse map pins, a ward scorecard tab, and the first report flow. Seed records are synthetic and the report flow is intentionally frontend-only until the FastAPI contract is wired in.
+
 ### Documentation Reading Order
 1. Read [`PRODUCT/prd.md`](PRODUCT/prd.md) for product goals and scope boundaries.
 2. Review [`PRODUCT/system-architecture.md`](PRODUCT/system-architecture.md) for high-level technical architecture.
