@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { issueService } from '../services/issueService.js';
 import { workflowService } from '../services/workflowService.js';
 import { verificationService } from '../services/verificationService.js';
+import { adversarialService } from '../services/adversarialService.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { aiQueue } from '../ai/queue.js';
 import multer from 'multer';
@@ -59,7 +60,12 @@ router.post('/', requireAuth, requireRole('citizen'), uploadPhoto, async (req, r
     }, req.user!.id);
     res.json({ success: true, data: issue });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[POST /api/issues] ERROR:', error?.message ?? error);
+    if (error?.message === 'An identical image has already been submitted for another issue.') {
+      res.status(400).json({ success: false, error: error.message });
+    } else {
+      res.status(500).json({ success: false, error: error.message, detail: process.env.NODE_ENV !== 'production' ? error?.detail ?? error?.stack?.slice(0,300) : undefined });
+    }
   }
 });
 
@@ -113,6 +119,14 @@ router.post('/:id/status', requireAuth, requireRole('officer'), async (req, res)
 router.post('/:id/proof', requireAuth, requireRole('officer'), async (req, res) => {
   try {
     const issue = await issueService.submitProof(req.params.id, req.body.note);
+    
+    // Async adversarial checks
+    if (req.body.mediaId) {
+      adversarialService.runProofChecks(req.params.id, req.body.mediaId).catch(err => {
+        console.error('[adversarial] proof check failed for', req.params.id, err);
+      });
+    }
+
     res.json({ success: true, data: issue });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -172,6 +186,30 @@ router.post('/:id/ai/infer', requireAuth, requireRole('officer', 'admin', 'resea
   try {
     const job = await aiQueue.enqueueIssueInference(req.params.id);
     res.status(202).json({ success: true, data: job });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+router.post('/:id/media', requireAuth, requireRole('citizen', 'officer'), async (req, res) => {
+  try {
+    const { dataUrl, type } = req.body;
+    if (!dataUrl) return res.status(400).json({ success: false, error: 'dataUrl required' });
+    
+    const { db } = await import('../db/index.js');
+    const { issueMedia } = await import('../db/schema.js');
+    const { createHash } = await import('crypto');
+    
+    const hash = createHash('sha256').update(dataUrl).digest('hex');
+    
+    await db.insert(issueMedia).values({
+      issueId: req.params.id,
+      type: type || 'before',
+      privatePath: dataUrl,
+      fileHash: hash,
+      perceptualHash: hash.substring(0, 16), // Use part of hash as perceptual hash for simple identical image matching
+    });
+    
+    res.json({ success: true, data: { status: 'saved' } });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

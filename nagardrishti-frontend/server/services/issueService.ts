@@ -1,17 +1,18 @@
 import { db } from '../db/index.js';
-import { issues, issueMedia, issueSupporters } from '../db/schema.js';
+import { issues, issueMedia, issueSupporters, verificationVotes, statusEvents } from '../db/schema.js';
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { privacyService } from './privacyService.js';
 import { auditService } from './auditService.js';
 import { priorityService } from './priorityService.js';
 import { nanoid } from 'nanoid';
 import { aiQueue } from '../ai/queue.js';
-import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { inactionService } from './inactionService.js';
 
 function generatePublicRef(): string {
-  return `ND-${Date.now().toString(36).toUpperCase()}-${nanoid(4).toUpperCase()}`;
+  // Use timestamp + random to avoid collisions with seeded ND-101..ND-125 after server restarts
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 5).toUpperCase();
+  return `ND-${ts}${rand}`;
 }
 
 function computeAge(createdAt: Date): { age: string; ageInDays: number } {
@@ -37,15 +38,48 @@ export const issueService = {
       language?: string;
       latitude: number;
       longitude: number;
-      photo?: {
-        buffer: Buffer;
-        originalName: string;
-        mimeType: string;
-        size: number;
-      };
+      photoDataUrl?: string;
     },
     reporterId: string
   ) {
+    let fileHash: string | null = null;
+    let perceptualHash: string | null = null;
+    let storedMediaPath: string | null = null;
+    let mimeType: string | null = null;
+    let fileSize: number | null = null;
+
+    if (data.photoDataUrl) {
+      const { createHash } = await import('crypto');
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      const matches = data.photoDataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        const buffer = Buffer.from(matches[2], 'base64');
+        fileSize = buffer.length;
+        fileHash = createHash('sha256').update(buffer).digest('hex');
+        perceptualHash = fileHash.substring(0, 16);
+
+        const existingMedia = await db.select().from(issueMedia).where(eq(issueMedia.fileHash, fileHash));
+        if (existingMedia.length > 0) {
+          throw new Error('An identical image has already been submitted for another issue.');
+        }
+
+        const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+        const filename = `${nanoid(12)}_${Date.now()}.${ext}`;
+        const issueUploadsDir = path.resolve(process.cwd(), 'uploads', 'issues');
+        await fs.mkdir(issueUploadsDir, { recursive: true });
+        await fs.writeFile(path.join(issueUploadsDir, filename), buffer);
+
+        storedMediaPath = `/uploads/issues/${filename}`;
+      } else {
+        fileHash = createHash('sha256').update(data.photoDataUrl).digest('hex');
+        perceptualHash = fileHash.substring(0, 16);
+        storedMediaPath = data.photoDataUrl;
+      }
+    }
+
     // 1. Coarsen location for privacy
     const coarsened = privacyService.coarsenLocation(data.latitude, data.longitude);
 
@@ -84,6 +118,19 @@ export const issueService = {
       })
       .returning();
 
+    if (fileHash && storedMediaPath) {
+      await db.insert(issueMedia).values({
+        issueId: issue.id,
+        type: 'before',
+        privatePath: storedMediaPath,
+        publicPath: storedMediaPath,
+        fileHash,
+        perceptualHash,
+        fileSize: fileSize ?? undefined,
+        mimeType: mimeType ?? undefined,
+      });
+    }
+
     // 5. Create initial audit ledger entry
     await auditService.appendStatusEvent({
       issueId: issue.id,
@@ -94,24 +141,6 @@ export const issueService = {
       reason: 'Issue reported by citizen',
     });
 
-    if (data.photo) {
-      const fileHash = createHash('sha256').update(data.photo.buffer).digest('hex');
-      const extension = data.photo.mimeType.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'bin';
-      const uploadDirectory = path.resolve(process.cwd(), 'uploads', 'private');
-      await mkdir(uploadDirectory, { recursive: true });
-      const privatePath = path.join(uploadDirectory, `${issue.id}-${fileHash}.${extension}`);
-      await writeFile(privatePath, data.photo.buffer);
-      await db.insert(issueMedia).values({
-        issueId: issue.id,
-        type: 'before',
-        privatePath,
-        fileHash,
-        fileSize: data.photo.size,
-        mimeType: data.photo.mimeType,
-        privacyReviewed: false,
-      });
-    }
-
     void aiQueue.enqueueIssueInference(issue.id);
 
     return issue;
@@ -121,13 +150,17 @@ export const issueService = {
    * Get a single issue by ID or publicRef, with media.
    */
   async getIssue(idOrRef: string) {
-    // Try by UUID first, then by publicRef
-    let results = await db.select().from(issues).where(eq(issues.id, idOrRef));
-    if (results.length === 0) {
-      results = await db.select().from(issues).where(eq(issues.publicRef, idOrRef));
+    let issue = null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrRef);
+    
+    if (isUuid) {
+      const results = await db.select().from(issues).where(eq(issues.id, idOrRef));
+      issue = results[0];
+    } else {
+      const results = await db.select().from(issues).where(eq(issues.publicRef, idOrRef));
+      issue = results[0];
     }
 
-    const issue = results[0];
     if (!issue) return null;
 
     const media = await db
@@ -135,7 +168,53 @@ export const issueService = {
       .from(issueMedia)
       .where(eq(issueMedia.issueId, issue.id));
 
-    const { age, ageInDays } = computeAge(issue.createdAt!);
+    const dateStr = issue.createdAt;
+    const dateObj = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr || new Date());
+    const { age, ageInDays } = computeAge(dateObj);
+
+    const updateDateStr = issue.updatedAt;
+    const updateDateObj = typeof updateDateStr === 'string' ? new Date(updateDateStr) : (updateDateStr || dateObj);
+    const updatedAge = computeAge(updateDateObj).age;
+
+    // Fetch verification votes
+    let fixedVotes = 0;
+    let notFixedVotes = 0;
+    let unsureVotes = 0;
+    let totalVotes = 0;
+    try {
+      const votes = await db
+        .select()
+        .from(verificationVotes)
+        .where(eq(verificationVotes.issueId, issue.id));
+      fixedVotes = votes.filter((v) => v.vote === 'fixed').length;
+      notFixedVotes = votes.filter((v) => v.vote === 'not_fixed').length;
+      unsureVotes = votes.filter((v) => v.vote === 'unsure').length;
+      totalVotes = votes.length;
+    } catch {
+      // Fallback if table not ready
+    }
+
+    // Fetch status events for timeline
+    let formattedEvents: any[] = [];
+    try {
+      const eventsList = await db
+        .select()
+        .from(statusEvents)
+        .where(eq(statusEvents.issueId, issue.id))
+        .orderBy(statusEvents.sequenceNum);
+      formattedEvents = eventsList.map((e) => ({
+        id: e.id,
+        issueId: e.issueId,
+        fromStatus: e.fromStatus,
+        toStatus: e.toStatus,
+        actor: e.actorId === issue.reporterId ? 'Citizen' : e.actorRole === 'system' ? 'System AI' : 'Officer',
+        actorRole: e.actorRole,
+        timestamp: (e.createdAt ?? new Date()).toISOString(),
+        reason: e.reason,
+      }));
+    } catch {
+      // Fallback
+    }
 
     return {
       ...issue,
@@ -143,8 +222,16 @@ export const issueService = {
       latitude: issue.publicLat,
       longitude: issue.publicLng,
       age,
+      updatedAge,
       ageInDays,
       media,
+      verificationVotes: {
+        fixed: fixedVotes,
+        notFixed: notFixedVotes,
+        unsure: unsureVotes,
+        total: totalVotes,
+      },
+      events: formattedEvents,
     };
   },
 
@@ -192,11 +279,13 @@ export const issueService = {
 
     const items = results.map((issue) => {
       const { age, ageInDays } = computeAge(issue.createdAt!);
+      const updatedAge = computeAge(issue.updatedAt || issue.createdAt!).age;
       return {
         ...issue,
         latitude: issue.publicLat,
         longitude: issue.publicLng,
         age,
+        updatedAge,
         ageInDays,
       };
     });
@@ -289,14 +378,23 @@ export const issueService = {
         title: issues.title,
         supporterCount: issues.supporterCount,
         createdAt: issues.createdAt,
+        wardId: issues.wardId,
       })
       .from(issues)
       .where(whereClause);
 
-    return results.map((m) => ({
-      ...m,
-      age: computeAge(m.createdAt!).age,
-    }));
+    const tierMap = await inactionService.batchComputeTiers(results);
+
+    return results.map((m) => {
+      const tierData = tierMap.get(m.id) || { tier: 0, inactionDays: 0 };
+      return {
+        ...m,
+        age: computeAge(m.createdAt!).age,
+        tier: tierData.tier,
+        inactionDays: tierData.inactionDays,
+        wardId: m.wardId,
+      };
+    });
   },
 
   /**

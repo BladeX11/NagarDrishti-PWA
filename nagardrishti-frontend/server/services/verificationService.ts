@@ -13,17 +13,22 @@ export const verificationService = {
    * After voting, checks thresholds for auto-reopen or auto-verify.
    */
   async castVote(
-    issueId: string,
+    issueIdOrRef: string,
     userId: string,
     vote: 'fixed' | 'not_fixed' | 'unsure',
     proofVersion: number = 1
   ) {
     // 1. Validate issue exists and is in correct state
-    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(issueIdOrRef);
+    const [issue] = await db.select().from(issues).where(
+      isUuid ? eq(issues.id, issueIdOrRef) : eq(issues.publicRef, issueIdOrRef)
+    );
     if (!issue) throw new Error('Issue not found');
     if (issue.status !== 'Claimed Resolved') {
       throw new Error('Can only verify issues in "Claimed Resolved" state');
     }
+
+    const resolvedIssueId = issue.id;
 
     // 2. Check for existing vote (one per user per proof version)
     const existing = await db
@@ -31,7 +36,7 @@ export const verificationService = {
       .from(verificationVotes)
       .where(
         and(
-          eq(verificationVotes.issueId, issueId),
+          eq(verificationVotes.issueId, resolvedIssueId),
           eq(verificationVotes.userId, userId),
           eq(verificationVotes.proofVersion, proofVersion)
         )
@@ -45,7 +50,7 @@ export const verificationService = {
     const [newVote] = await db
       .insert(verificationVotes)
       .values({
-        issueId,
+        issueId: resolvedIssueId,
         userId,
         vote,
         proofVersion,
@@ -53,7 +58,7 @@ export const verificationService = {
       .returning();
 
     // 4. Check thresholds for auto-transitions
-    await this.checkThresholds(issueId);
+    await this.checkThresholds(resolvedIssueId);
 
     return newVote;
   },

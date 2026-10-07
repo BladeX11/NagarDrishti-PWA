@@ -17,15 +17,21 @@ export function createApp(): Express {
   const app = express();
 
   // Security Middleware
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
   app.use(cors({
     origin: ['http://localhost:3000', 'http://localhost:5173'],
     credentials: true,
   }));
 
+  // Serve uploaded media files
+  const uploadsDir = path.resolve(process.cwd(), 'uploads');
+  app.use('/uploads', express.static(uploadsDir));
+
   // Body Parsing Middleware
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ limit: '10mb', extended: true }));
   app.use(cookieParser());
 
   // Rate Limiting
@@ -68,6 +74,13 @@ export function createApp(): Express {
   app.use('/api/*', (req: Request, res: Response) => {
     res.status(404).json({ success: false, error: 'API endpoint not found' });
   });
+
+  // Fallback for root in dev mode so users don't see "Cannot GET /"
+  if (process.env.NODE_ENV !== 'production') {
+    app.get('/', (req, res) => {
+      res.redirect('http://localhost:3000');
+    });
+  }
 
   // Global Error Handler
   app.use(errorHandler);

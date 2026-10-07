@@ -1,9 +1,143 @@
 {
-  "id": "ff18e7eb-9354-4616-b2d8-3a3d36859240",
-  "prevId": "b2046e31-63c8-4dfe-a868-5923fd910d2b",
+  "id": "37d1805b-5591-438e-b98d-eab5d4a50628",
+  "prevId": "e575fd3f-2b38-47aa-93d4-3d38e7233869",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.adversarial_flags": {
+      "name": "adversarial_flags",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "issue_id": {
+          "name": "issue_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rule": {
+          "name": "rule",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "severity": {
+          "name": "severity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_by": {
+          "name": "resolved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution": {
+          "name": "resolution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model_version": {
+          "name": "model_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'adversarial-rules-v1.0'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_adversarial_flags_issue_id": {
+          "name": "idx_adversarial_flags_issue_id",
+          "columns": [
+            {
+              "expression": "issue_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_adversarial_flags_rule": {
+          "name": "idx_adversarial_flags_rule",
+          "columns": [
+            {
+              "expression": "rule",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "adversarial_flags_issue_id_issues_id_fk": {
+          "name": "adversarial_flags_issue_id_issues_id_fk",
+          "tableFrom": "adversarial_flags",
+          "tableTo": "issues",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "adversarial_flags_resolved_by_users_id_fk": {
+          "name": "adversarial_flags_resolved_by_users_id_fk",
+          "tableFrom": "adversarial_flags",
+          "tableTo": "users",
+          "columnsFrom": [
+            "resolved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.departments": {
       "name": "departments",
       "schema": "",
@@ -32,6 +166,116 @@
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.evaluation_annotations": {
+      "name": "evaluation_annotations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "record_id": {
+          "name": "record_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "annotator_id": {
+          "name": "annotator_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "priority": {
+          "name": "priority",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "duplicate_label": {
+          "name": "duplicate_label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rationale": {
+          "name": "rationale",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_evaluation_annotations_record_id": {
+          "name": "idx_evaluation_annotations_record_id",
+          "columns": [
+            {
+              "expression": "record_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_evaluation_annotations_annotator_id": {
+          "name": "idx_evaluation_annotations_annotator_id",
+          "columns": [
+            {
+              "expression": "annotator_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "evaluation_annotations_record_id_annotator_id_unique": {
+          "name": "evaluation_annotations_record_id_annotator_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "record_id",
+            "annotator_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -437,6 +681,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "perceptual_hash": {
+          "name": "perceptual_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exif_lat": {
+          "name": "exif_lat",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exif_lng": {
+          "name": "exif_lng",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
         "captured_at": {
           "name": "captured_at",
           "type": "timestamp",
@@ -491,6 +753,21 @@
           "columns": [
             {
               "expression": "file_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_issue_media_phash": {
+          "name": "idx_issue_media_phash",
+          "columns": [
+            {
+              "expression": "perceptual_hash",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

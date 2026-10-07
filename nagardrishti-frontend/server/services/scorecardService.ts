@@ -1,7 +1,8 @@
 import { db } from '../db/index.js';
-import { issues, statusEvents } from '../db/schema.js';
-import { eq, lt, desc, and } from 'drizzle-orm';
+import { issues } from '../db/schema.js';
+import { lt, and, inArray } from 'drizzle-orm';
 import { priorityService } from './priorityService.js';
+import { inactionService } from './inactionService.js';
 
 export const scorecardService = {
   async computeScorecard(wardId?: string, departmentId?: string, period?: string) {
@@ -42,7 +43,7 @@ export const scorecardService = {
       .where(
         and(
           lt(issues.slaDeadline, new Date()),
-          eq(issues.status, 'In Progress') // Simplified for demo
+          inArray(issues.status, ['Open', 'Triaged', 'Assigned', 'In Progress', 'Reopened'])
         )
       );
     return breaches;
@@ -50,13 +51,20 @@ export const scorecardService = {
 
   async computeForgottenIssues() {
     const allIssues = await db.select().from(issues);
-    const active = allIssues.filter(i => ['Open', 'Assigned', 'In Progress'].includes(i.status));
+    const active = allIssues.filter(i => ['Open', 'Triaged', 'Assigned', 'In Progress', 'Reopened'].includes(i.status));
     
-    const withPriority = active.map(i => ({
-      ...i,
-      ...priorityService.computePriority(i)
-    }));
+    const tierMap = await inactionService.batchComputeTiers(active);
 
-    return withPriority.sort((a, b) => b.score - a.score);
+    const enriched = active.map(i => {
+      const tierData = tierMap.get(i.id) || { tier: 0, inactionDays: 0 };
+      return {
+        ...i,
+        ...priorityService.computePriority(i),
+        tier: tierData.tier,
+        inactionDays: tierData.inactionDays
+      };
+    });
+
+    return enriched.sort((a, b) => b.tier - a.tier || b.inactionDays - a.inactionDays);
   }
 };

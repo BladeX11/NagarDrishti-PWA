@@ -26,7 +26,7 @@ NagarDrishti is designed as a small, demonstrable civic-grievance system that re
 ## 4. Component diagram
 ```mermaid
 flowchart LR
-  C[Citizen PWA\nCamera, text, map, local drafts]
+  C[Citizen portal /citizen/*\nResponsive PWA: camera, text, map, bottom-nav\nInstallable on Android/iOS from browser]
   P[Public web\nMap, scorecards, breach wall]
   O[Officer/Admin console\nMock controlled roles]
   API[FastAPI API /api/v1\nAuth, validation, redaction]
@@ -56,18 +56,24 @@ flowchart LR
 
 ### ASCII deployment view
 ```text
-[Mobile browser]           [Desktop browser]
-      | HTTPS                    | HTTPS
-      +-----------+--------------+
-                  v
-        [FastAPI API container]
-             |       |       \
-             |       |        +--> [Object storage]
-             |       +-----------> [Redis queue/cache]
-             v                         |
+[Mobile browser]              [Desktop browser]
+      | HTTPS                      | HTTPS
+      +----------+--+--------------+
+                 |  |
+       [nagardrishti-frontend - single Vite + Express app]
+       /citizen/* = responsive citizen portal (PWA-installable)
+       /officer/* = officer console
+       /transparency/* = public dashboard
+       /research/* = research dashboard
+                 |
+         [Express API /api]
+              |       |       \
+              |       |        +--> [Object storage]
+              |       +-----------> [Redis queue/cache]
+              v                           |
  [PostgreSQL + PostGIS] <--- [AI/worker container]
-             |
-             +--> [optional adapter outbox] --> [future PMC/CPGRAMS-style backend]
+              |
+              +--> [optional adapter outbox] --> [future PMC/CPGRAMS-style backend]
 ```
 
 ## 5. Core domain ownership

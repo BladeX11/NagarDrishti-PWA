@@ -19,15 +19,19 @@ export type Category =
 
 export type Issue = {
   id: string;
+  publicRef?: string;
   title: string;
   description: string;
   category: Category;
   status: IssueStatus;
   department: string;
   ward: string;
+  wardId?: string;
+  departmentId?: string;
   age: string;
   ageInDays: number;
   supporters: number;
+  supporterCount?: number;
   position: [number, number];
   createdAt: string;
   priority: number;
@@ -39,6 +43,7 @@ export type Issue = {
   verificationVotes: { fixed: number; notFixed: number; unsure: number };
   proofSubmitted: boolean;
   assignedOfficer?: string;
+  assignedTo?: string;
 };
 
 export type StatusEvent = {

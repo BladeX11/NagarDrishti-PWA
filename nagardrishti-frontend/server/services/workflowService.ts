@@ -2,6 +2,7 @@ import { db } from '../db/index.js';
 import { issues } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { auditService } from './auditService.js';
+import { adversarialService } from './adversarialService.js';
 
 // ═══════════════════════════════════════════════════════
 // VALID STATUS TRANSITIONS (backend-enforced)
@@ -76,7 +77,19 @@ export const workflowService = {
       );
     }
 
-    // 4. Append to audit ledger (hash-chained)
+    // 4. Adversarial check for Verified Fixed
+    if (toStatus === 'Verified Fixed') {
+      const activeFlags = await adversarialService.getActiveFlags(issueId);
+      const highFlags = activeFlags.filter(f => f.severity === 'high' && !f.resolvedAt);
+      if (highFlags.length > 0) {
+        throw new Error(
+          `Cannot advance to "Verified Fixed": ${highFlags.length} high-severity adversarial flag(s) are active. ` +
+          `Admin must review flags first.`
+        );
+      }
+    }
+
+    // 5. Append to audit ledger (hash-chained)
     await auditService.appendStatusEvent({
       issueId,
       fromStatus,
@@ -86,7 +99,7 @@ export const workflowService = {
       reason,
     });
 
-    // 5. Update issue status
+    // 6. Update issue status
     const updateData: Record<string, unknown> = {
       status: toStatus,
       updatedAt: new Date(),

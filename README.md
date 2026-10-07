@@ -1,94 +1,186 @@
-# NagarDrishti (CivicLens)
+# NagarDrishti
 
-> **Mobile-first public civic grievance platform with privacy-preserving issue mapping, proof-of-fix verification, citizen transparency, and explainable AI assist modules.**
-
----
-
-## Overview
-
-Civic grievance systems often suffer from a trust-collapse loop: filing is tedious, progress is invisible, "resolved" status lacks proof, and citizens disengage. **NagarDrishti** (research framing: **CivicLens**) addresses these challenges by offering:
-- **Low-Friction Reporting**: Camera-first reporting with AI-assisted classification and multilingual support (English, Hindi, Marathi).
-- **Proximity-Based De-duplication**: Nearby issue detection and support mechanism to consolidate duplicate complaints.
-- **Accountable Closure**: Proof-of-fix requirement for claimed resolutions and a crowdsourced citizen verification voting system.
-- **Systemic Transparency**: Ward and department scorecards, SLA-breach walls, and forgotten-issues prioritization without exposing personal identities.
+> **An accountability-centric civic issue platform where the architecture itself is adversarial to corruption — not just another complaint box with a dashboard.**
 
 ---
 
-## Core Architecture & Components
+## The Problem
 
-NagarDrishti is designed as a decoupled, modular system:
-- **Frontend**: Responsive React Progressive Web App (PWA) tailored for mobile citizens and officers.
-- **Backend API**: Python FastAPI service with PostgreSQL / PostGIS for geospatial data and lifecycle management.
-- **AI Modules (M1–M6)**:
-  - **M1**: Multi-class category classification (8 core categories).
-  - **M2**: Object & severity detection from image media.
-  - **M3**: Department routing and urgency scoring.
-  - **M4**: Geospatial & textual duplicate clustering.
-  - **M5**: Proof-of-fix authenticity validation.
-  - **M6**: Ward/department aggregate analytics and anomaly detection.
-- **Public & Officer Consoles**: Role-gated mock municipal triage and public transparency portals.
+Existing civic platforms (CPGRAMS, Swachhata, IChangeMyCity) fail at the same point: **after filing**. Complaints go in, tickets get "disposed," but nothing verifiably changes. Citizens stop reporting because nothing happens. The municipal body sees fewer complaints and assumes things are fine. This is the trust-collapse loop.
+
+## What NagarDrishti Does Differently
+
+NagarDrishti attacks the post-filing gap with a **Forced Transparency Engine (FTE)** — four interlocking mechanisms that make hiding data harder than being transparent:
+
+| Mechanism | What it does |
+|---|---|
+| **Hash-Chain Audit Ledger** | Every status change is cryptographically committed. History cannot be rewritten without detection. |
+| **Inaction Amplification** | Unresolved issues auto-escalate through visibility tiers (T0→T4), making inaction progressively more public and costly. |
+| **Adversarial Proof Detection** | Catches fake resolutions: photo reuse across issues, impossible resolution times, GPS mismatches, bulk suspicious closures. |
+| **Transparency Accountability Score (TAS)** | Departments are scored on HOW they behave (evidence rate, verification response, flag rate) — not just resolution counts. |
+
+Plus three novel analysis modules that no existing civic platform implements:
+
+- **Ward Equity Analysis (N1)** — measures whether poor wards get slower service than rich wards for the same issue type
+- **Cross-Category Cascade Detection (N4)** — detects when spatially clustered complaints of different types share an infrastructure root cause
+- **Trust-Weighted Priority Scoring (N2)** — dynamic urgency based on supporter growth, seasonal relevance, and reporter credibility
 
 ---
 
-## Repository Structure
+## System Architecture
 
-```text
-.
-├── PRODUCT/
-│   ├── prd.md                    # Product Requirements Document
-│   ├── system-architecture.md    # End-to-end system architecture specification
-│   ├── api-spec.md               # REST API endpoints & data models specification
-│   ├── data-model-schema.md      # PostgreSQL/PostGIS database schema definitions
-│   └── srs.md                    # Software Requirements Specification
-├── TEAM/
-│   ├── 12-week-plan.md           # Milestone roadmap & weekly sprint goals
-│   ├── roles-and-workflow.md     # Team responsibilities & Git branching strategy
-│   ├── engineering-conventions.md# Code style, commit conventions, and QA standards
-│   ├── risk-register.md          # Technical & product risk mitigation matrix
-│   └── definition-of-done.md     # Quality gates & verification checklists
-├── extras/
-│   ├── tech-stack-decisions.md   # Architectural Decision Records (ADRs)
-│   ├── deployment-and-cost.md    # Infrastructure, hosting, and cost estimates
-│   ├── demo-script.md            # Evaluator & video demonstration walkthrough
-│   └── ip-and-patent-notes.md    # Prior art research & IP strategy notes
-├── .gitignore
-├── MISTAKES.md                   # Project mistake log & lessons learned
-└── README.md                     # Main repository documentation
+```
+Citizen PWA          Public Dashboard         Officer Console        Research Dashboard
+    |                      |                       |                       |
+    +----------------------+---+-------------------+-----------------------+
+                               |
+                        Express API (TypeScript)
+                               |
+          +----------+---------+---------+------------------+
+          |          |         |         |                  |
+     PostgreSQL   Redis    Object    Forced             AI Modules
+     (Drizzle)    Queue    Storage   Transparency       M1-M7 + N1-N4
+                                     Engine (FTE)
+```
+
+### Repository Structure
+
+```
+NagarDrishti-app/
+├── plans/                        # Master plan and sub-documents
+│   ├── MASTER_PLAN.md            # Executive overview + contribution statement
+│   ├── 01-system-architecture.md # Tech stack, DB schema, API contracts
+│   ├── 02-forced-transparency-engine.md  # FTE design (4 mechanisms)
+│   ├── 03-novelty-features.md    # N1-N6 novel features with algorithms
+│   ├── 04-ai-modules.md          # M1-M7 + novel AI, training plans
+│   ├── 05-implementation-roadmap.md  # 8-phase build plan (tracked)
+│   ├── 06-evaluation-and-paper.md    # Research questions, metrics, paper
+│   └── progress/SESSION_LOG.md   # Per-session progress tracking
+│
+├── nagardrishti-frontend/        # Main full-stack app
+│   ├── client/src/               # React + TypeScript frontend
+│   │   ├── pages/citizen/        # Citizen dashboard
+│   │   ├── pages/officer/        # Officer console
+│   │   ├── pages/transparency/   # Public transparency dashboard
+│   │   └── pages/research/       # Research dashboard
+│   └── server/                   # Express backend
+│       ├── routes/               # API route handlers
+│       ├── services/             # Business logic (issue, workflow, audit, etc.)
+│       ├── ai/                   # AI orchestrator, queue, rules
+│       └── db/                   # Drizzle schema, migrations, seed
+│
+├── pwa/                          # Standalone citizen PWA (Vite + React)
+├── PRODUCT/                      # PRD, SRS, API spec, data model, system arch
+├── TEAM/                         # Team docs, conventions, risk register
+├── AGENTS.md                     # AI agent rules for session continuity
+├── MISTAKES.md                   # Mistake log and lessons learned
+└── README.md
 ```
 
 ---
 
-## 12-Week Development Roadmap
+## Issue Lifecycle
 
-| Phase | Timeline | Core Deliverables |
-|---|---|---|
-| **Phase 1: Foundation** | Weeks 1–4 | Database schema, mock auth, photo intake PWA, coarse geospatial mapping. |
-| **Phase 2: Workflow & Verification** | Weeks 5–6 | Officer triage console, proof-of-fix uploads, citizen verification & reopen rules. |
-| **Phase 3: AI Modules Baseline** | Weeks 7–9 | M1–M4 baseline models, M5 proof validation flags, asynchronous inference pipeline. |
-| **Phase 4: Analytics & Hardening** | Weeks 10–12 | M6 scorecard snapshots, SLA breach wall, security redaction, and demo execution. |
+```
+Open → Triaged → Assigned → In Progress → Claimed Resolved → Verified Fixed
+                                                   ↓
+                                               Reopened
+                                    (2+ citizen "not fixed" votes,
+                                     or adversarial flag on proof)
+```
+
+Rules enforced by the system (not just guidelines):
+- Officer evidence **cannot** directly create "Verified Fixed" — citizen votes required
+- Every status transition creates a **hash-chained event** in the audit ledger
+- High-severity adversarial flags **block** advancement until reviewed
 
 ---
 
-## Getting Started & Engineering Standards
+## Approved Issue Categories
 
-### PWA quick start
+`pothole/road` · `garbage/waste` · `drainage/sewage` · `water supply` · `streetlight/electrical` · `stray animals` · `encroachment` · `other`
 
-The first frontend slice lives at the repository root and uses React, Vite, Leaflet, and `vite-plugin-pwa`.
+Stable across UI, API, database, dataset, and paper.
 
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, TypeScript, Vite, shadcn/ui |
+| Maps | Leaflet |
+| Backend | Express.js, TypeScript |
+| ORM | Drizzle ORM |
+| Database | PostgreSQL |
+| PWA | Service Worker, IndexedDB |
+
+---
+
+---
+
+## Build Progress
+
+- Phase 1: Database + Vertical Slice — COMPLETED
+- Phase 2: Complete PWA + Hash-Chain Verification — Next
+- Detailed roadmap: [`plans/05-implementation-roadmap.md`](plans/05-implementation-roadmap.md)
+- Per-session log: [`plans/progress/SESSION_LOG.md`](plans/progress/SESSION_LOG.md)
+
+---
+
+## Getting Started
+
+### 1. Database Setup (Docker)
+Start the PostgreSQL container:
 ```bash
-npm install
+cd nagardrishti-frontend
+docker compose up -d
+npm run db:push
+npm run db:seed
+```
+
+### 2. Backend Server
+Runs on `http://localhost:5000`:
+```bash
+cd nagardrishti-frontend
+npm run dev:server
+```
+
+### 3. Citizen PWA
+Runs on `http://localhost:5174` (proxies `/api` to backend):
+```bash
+cd pwa
 npm run dev
 ```
 
-Open the local Vite URL on a mobile-sized viewport. The current demo includes a seeded public issue map, coarse map pins, a ward scorecard tab, and the first report flow. Seed records are synthetic and the report flow is intentionally frontend-only until the FastAPI contract is wired in.
+### 4. Administrative / Public Dashboards
+Runs on `http://localhost:5173`:
+```bash
+cd nagardrishti-frontend
+npm run dev
+```
 
-### Documentation Reading Order
-1. Read [`PRODUCT/prd.md`](PRODUCT/prd.md) for product goals and scope boundaries.
-2. Review [`PRODUCT/system-architecture.md`](PRODUCT/system-architecture.md) for high-level technical architecture.
-3. Consult [`TEAM/engineering-conventions.md`](TEAM/engineering-conventions.md) for coding guidelines and Git practices.
+---
+
+## Plan Documents (Start Here)
+
+| Document | Purpose |
+|---|---|
+| [`plans/MASTER_PLAN.md`](plans/MASTER_PLAN.md) | Executive overview, contribution statement |
+| [`plans/02-forced-transparency-engine.md`](plans/02-forced-transparency-engine.md) | Core novelty: FTE design |
+| [`plans/03-novelty-features.md`](plans/03-novelty-features.md) | N1-N6 novel features |
+| [`plans/05-implementation-roadmap.md`](plans/05-implementation-roadmap.md) | 8-phase build plan with status tracking |
+
+---
+
+## Research Context
+
+**Paper framing:** NagarDrishti contributes an accountability-centric civic issue lifecycle that introduces adversarial proof-of-fix detection, ward equity measurement, cross-category cascade detection, and an auditable transparency score — within a privacy-preserving, citizen-verified workflow.
+
+**Non-goals:** Live government API integration, autonomous AI closure decisions, full treasury audit, production-grade reliability claims.
 
 ---
 
 ## License
 
-This project is created for academic research and evaluation (SEM 5 AI Capstone Project).
+Academic research project — SEM 5 AI Capstone.

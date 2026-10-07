@@ -1,9 +1,143 @@
 {
-  "id": "b2046e31-63c8-4dfe-a868-5923fd910d2b",
+  "id": "e575fd3f-2b38-47aa-93d4-3d38e7233869",
   "prevId": "97196d2a-e688-4531-bdd7-0c9acbbf65d9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.adversarial_flags": {
+      "name": "adversarial_flags",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "issue_id": {
+          "name": "issue_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rule": {
+          "name": "rule",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "severity": {
+          "name": "severity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "details": {
+          "name": "details",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolved_by": {
+          "name": "resolved_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "resolution": {
+          "name": "resolution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model_version": {
+          "name": "model_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'adversarial-rules-v1.0'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_adversarial_flags_issue_id": {
+          "name": "idx_adversarial_flags_issue_id",
+          "columns": [
+            {
+              "expression": "issue_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_adversarial_flags_rule": {
+          "name": "idx_adversarial_flags_rule",
+          "columns": [
+            {
+              "expression": "rule",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "adversarial_flags_issue_id_issues_id_fk": {
+          "name": "adversarial_flags_issue_id_issues_id_fk",
+          "tableFrom": "adversarial_flags",
+          "tableTo": "issues",
+          "columnsFrom": [
+            "issue_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "adversarial_flags_resolved_by_users_id_fk": {
+          "name": "adversarial_flags_resolved_by_users_id_fk",
+          "tableFrom": "adversarial_flags",
+          "tableTo": "users",
+          "columnsFrom": [
+            "resolved_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.departments": {
       "name": "departments",
       "schema": "",
@@ -219,183 +353,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.issue_graph_edges": {
-      "name": "issue_graph_edges",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "issue_a_id": {
-          "name": "issue_a_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "issue_b_id": {
-          "name": "issue_b_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "spatial_distance": {
-          "name": "spatial_distance",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "text_similarity": {
-          "name": "text_similarity",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "category_match": {
-          "name": "category_match",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "temporal_similarity": {
-          "name": "temporal_similarity",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "edge_score": {
-          "name": "edge_score",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "edge_type": {
-          "name": "edge_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'pending'"
-        },
-        "model_version": {
-          "name": "model_version",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_issue_graph_edges_issue_a": {
-          "name": "idx_issue_graph_edges_issue_a",
-          "columns": [
-            {
-              "expression": "issue_a_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_issue_graph_edges_issue_b": {
-          "name": "idx_issue_graph_edges_issue_b",
-          "columns": [
-            {
-              "expression": "issue_b_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "idx_issue_graph_edges_score": {
-          "name": "idx_issue_graph_edges_score",
-          "columns": [
-            {
-              "expression": "edge_score",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "issue_graph_edges_issue_a_id_issues_id_fk": {
-          "name": "issue_graph_edges_issue_a_id_issues_id_fk",
-          "tableFrom": "issue_graph_edges",
-          "tableTo": "issues",
-          "columnsFrom": [
-            "issue_a_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "issue_graph_edges_issue_b_id_issues_id_fk": {
-          "name": "issue_graph_edges_issue_b_id_issues_id_fk",
-          "tableFrom": "issue_graph_edges",
-          "tableTo": "issues",
-          "columnsFrom": [
-            "issue_b_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "issue_graph_edges_issue_a_id_issue_b_id_unique": {
-          "name": "issue_graph_edges_issue_a_id_issue_b_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "issue_a_id",
-            "issue_b_id"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.issue_media": {
       "name": "issue_media",
       "schema": "",
@@ -436,6 +393,24 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "perceptual_hash": {
+          "name": "perceptual_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exif_lat": {
+          "name": "exif_lat",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "exif_lng": {
+          "name": "exif_lng",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
         },
         "captured_at": {
           "name": "captured_at",
@@ -491,6 +466,21 @@
           "columns": [
             {
               "expression": "file_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_issue_media_phash": {
+          "name": "idx_issue_media_phash",
+          "columns": [
+            {
+              "expression": "perceptual_hash",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
