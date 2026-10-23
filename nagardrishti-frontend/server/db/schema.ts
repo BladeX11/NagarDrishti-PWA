@@ -3,6 +3,7 @@ import { pgTable, text, timestamp, integer, boolean, doublePrecision, uuid, json
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   phoneHash: text('phone_hash').unique(),
+  emailHash: text('email_hash').unique(),
   displayName: text('display_name').notNull(),
   role: text('role').notNull(), // citizen | officer | admin | researcher
   ward: text('ward'),
@@ -18,6 +19,32 @@ export const sessions = pgTable('sessions', {
   expiresAt: timestamp('expires_at'),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+export const otpChallenges = pgTable('otp_challenges', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  destinationHash: text('destination_hash').notNull(),
+  channel: text('channel').notNull(), // email | sms
+  codeHash: text('code_hash').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  destinationIdx: index('idx_otp_challenges_destination').on(table.destinationHash),
+}));
+
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  userIdx: index('idx_push_subscriptions_user').on(table.userId),
+}));
 
 export const wards = pgTable('wards', {
   id: text('id').primaryKey(), // 'ward-11', etc.

@@ -1,12 +1,18 @@
-import { db } from '../db/index.js';
-import { issues, issueMedia, issueSupporters, verificationVotes, statusEvents } from '../db/schema.js';
-import { eq, desc, sql, and } from 'drizzle-orm';
-import { privacyService } from './privacyService.js';
-import { auditService } from './auditService.js';
-import { priorityService } from './priorityService.js';
-import { nanoid } from 'nanoid';
-import { aiQueue } from '../ai/queue.js';
-import { inactionService } from './inactionService.js';
+import { db } from "../db/index.js";
+import {
+  issues,
+  issueMedia,
+  issueSupporters,
+  verificationVotes,
+  statusEvents,
+} from "../db/schema.js";
+import { eq, desc, sql, and } from "drizzle-orm";
+import { privacyService } from "./privacyService.js";
+import { auditService } from "./auditService.js";
+import { priorityService } from "./priorityService.js";
+import { aiQueue } from "../ai/queue.js";
+import { inactionService } from "./inactionService.js";
+import { storeIssueImage } from "./objectStorage.js";
 
 function generatePublicRef(): string {
   // Use timestamp + random to avoid collisions with seeded ND-101..ND-125 after server restarts
@@ -23,7 +29,7 @@ function computeAge(createdAt: Date): { age: string; ageInDays: number } {
 
   if (diffDays > 0) return { age: `${diffDays}d ago`, ageInDays: diffDays };
   if (diffHours > 0) return { age: `${diffHours}h ago`, ageInDays: 0 };
-  return { age: 'just now', ageInDays: 0 };
+  return { age: "just now", ageInDays: 0 };
 }
 
 export const issueService = {
@@ -45,43 +51,59 @@ export const issueService = {
     let fileHash: string | null = null;
     let perceptualHash: string | null = null;
     let storedMediaPath: string | null = null;
+    let publicMediaPath: string | null = null;
     let mimeType: string | null = null;
     let fileSize: number | null = null;
 
     if (data.photoDataUrl) {
-      const { createHash } = await import('crypto');
-      const fs = await import('fs/promises');
-      const path = await import('path');
+      const { createHash } = await import("crypto");
 
-      const matches = data.photoDataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      const matches = data.photoDataUrl.match(
+        /^data:([A-Za-z-+\/]+);base64,(.+)$/
+      );
       if (matches) {
         mimeType = matches[1];
-        const buffer = Buffer.from(matches[2], 'base64');
+        const buffer = Buffer.from(matches[2], "base64");
         fileSize = buffer.length;
-        fileHash = createHash('sha256').update(buffer).digest('hex');
+        fileHash = createHash("sha256").update(buffer).digest("hex");
         perceptualHash = fileHash.substring(0, 16);
 
-        const existingMedia = await db.select().from(issueMedia).where(eq(issueMedia.fileHash, fileHash));
+        const existingMedia = await db
+          .select()
+          .from(issueMedia)
+          .where(eq(issueMedia.fileHash, fileHash));
         if (existingMedia.length > 0) {
-          throw new Error('An identical image has already been submitted for another issue.');
+          throw new Error(
+            "An identical image has already been submitted for another issue."
+          );
         }
 
-        const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-        const filename = `${nanoid(12)}_${Date.now()}.${ext}`;
-        const issueUploadsDir = path.resolve(process.cwd(), 'uploads', 'issues');
-        await fs.mkdir(issueUploadsDir, { recursive: true });
-        await fs.writeFile(path.join(issueUploadsDir, filename), buffer);
-
-        storedMediaPath = `/uploads/issues/${filename}`;
+        const ext =
+          mimeType === "image/png"
+            ? "png"
+            : mimeType === "image/webp"
+              ? "webp"
+              : "jpg";
+        const stored = await storeIssueImage({
+          buffer,
+          mimeType,
+          extension: ext,
+        });
+        storedMediaPath = stored.privatePath;
+        publicMediaPath = stored.publicPath;
       } else {
-        fileHash = createHash('sha256').update(data.photoDataUrl).digest('hex');
+        fileHash = createHash("sha256").update(data.photoDataUrl).digest("hex");
         perceptualHash = fileHash.substring(0, 16);
         storedMediaPath = data.photoDataUrl;
+        publicMediaPath = data.photoDataUrl;
       }
     }
 
     // 1. Coarsen location for privacy
-    const coarsened = privacyService.coarsenLocation(data.latitude, data.longitude);
+    const coarsened = privacyService.coarsenLocation(
+      data.latitude,
+      data.longitude
+    );
 
     // 2. Compute SLA deadline (default 7 days)
     const slaDeadline = new Date();
@@ -103,8 +125,8 @@ export const issueService = {
         title: data.title,
         description: data.description ?? null,
         category: data.category,
-        language: data.language ?? 'en',
-        status: 'Open',
+        language: data.language ?? "en",
+        status: "Open",
         privateLat: data.latitude,
         privateLng: data.longitude,
         publicGeohash: coarsened.geohash,
@@ -121,9 +143,9 @@ export const issueService = {
     if (fileHash && storedMediaPath) {
       await db.insert(issueMedia).values({
         issueId: issue.id,
-        type: 'before',
+        type: "before",
         privatePath: storedMediaPath,
-        publicPath: storedMediaPath,
+        publicPath: publicMediaPath,
         fileHash,
         perceptualHash,
         fileSize: fileSize ?? undefined,
@@ -135,10 +157,10 @@ export const issueService = {
     await auditService.appendStatusEvent({
       issueId: issue.id,
       fromStatus: null,
-      toStatus: 'Open',
+      toStatus: "Open",
       actorId: reporterId,
-      actorRole: 'citizen',
-      reason: 'Issue reported by citizen',
+      actorRole: "citizen",
+      reason: "Issue reported by citizen",
     });
 
     void aiQueue.enqueueIssueInference(issue.id);
@@ -151,13 +173,22 @@ export const issueService = {
    */
   async getIssue(idOrRef: string) {
     let issue = null;
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrRef);
-    
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        idOrRef
+      );
+
     if (isUuid) {
-      const results = await db.select().from(issues).where(eq(issues.id, idOrRef));
+      const results = await db
+        .select()
+        .from(issues)
+        .where(eq(issues.id, idOrRef));
       issue = results[0];
     } else {
-      const results = await db.select().from(issues).where(eq(issues.publicRef, idOrRef));
+      const results = await db
+        .select()
+        .from(issues)
+        .where(eq(issues.publicRef, idOrRef));
       issue = results[0];
     }
 
@@ -169,11 +200,15 @@ export const issueService = {
       .where(eq(issueMedia.issueId, issue.id));
 
     const dateStr = issue.createdAt;
-    const dateObj = typeof dateStr === 'string' ? new Date(dateStr) : (dateStr || new Date());
+    const dateObj =
+      typeof dateStr === "string" ? new Date(dateStr) : dateStr || new Date();
     const { age, ageInDays } = computeAge(dateObj);
 
     const updateDateStr = issue.updatedAt;
-    const updateDateObj = typeof updateDateStr === 'string' ? new Date(updateDateStr) : (updateDateStr || dateObj);
+    const updateDateObj =
+      typeof updateDateStr === "string"
+        ? new Date(updateDateStr)
+        : updateDateStr || dateObj;
     const updatedAge = computeAge(updateDateObj).age;
 
     // Fetch verification votes
@@ -186,9 +221,9 @@ export const issueService = {
         .select()
         .from(verificationVotes)
         .where(eq(verificationVotes.issueId, issue.id));
-      fixedVotes = votes.filter((v) => v.vote === 'fixed').length;
-      notFixedVotes = votes.filter((v) => v.vote === 'not_fixed').length;
-      unsureVotes = votes.filter((v) => v.vote === 'unsure').length;
+      fixedVotes = votes.filter(v => v.vote === "fixed").length;
+      notFixedVotes = votes.filter(v => v.vote === "not_fixed").length;
+      unsureVotes = votes.filter(v => v.vote === "unsure").length;
       totalVotes = votes.length;
     } catch {
       // Fallback if table not ready
@@ -202,12 +237,17 @@ export const issueService = {
         .from(statusEvents)
         .where(eq(statusEvents.issueId, issue.id))
         .orderBy(statusEvents.sequenceNum);
-      formattedEvents = eventsList.map((e) => ({
+      formattedEvents = eventsList.map(e => ({
         id: e.id,
         issueId: e.issueId,
         fromStatus: e.fromStatus,
         toStatus: e.toStatus,
-        actor: e.actorId === issue.reporterId ? 'Citizen' : e.actorRole === 'system' ? 'System AI' : 'Officer',
+        actor:
+          e.actorId === issue.reporterId
+            ? "Citizen"
+            : e.actorRole === "system"
+              ? "System AI"
+              : "Officer",
         actorRole: e.actorRole,
         timestamp: (e.createdAt ?? new Date()).toISOString(),
         reason: e.reason,
@@ -254,10 +294,13 @@ export const issueService = {
     // Build conditions
     const conditions = [];
     if (filters.status) conditions.push(eq(issues.status, filters.status));
-    if (filters.category) conditions.push(eq(issues.category, filters.category));
+    if (filters.category)
+      conditions.push(eq(issues.category, filters.category));
     if (filters.wardId) conditions.push(eq(issues.wardId, filters.wardId));
-    if (filters.departmentId) conditions.push(eq(issues.departmentId, filters.departmentId));
-    if (filters.reporterId) conditions.push(eq(issues.reporterId, filters.reporterId));
+    if (filters.departmentId)
+      conditions.push(eq(issues.departmentId, filters.departmentId));
+    if (filters.reporterId)
+      conditions.push(eq(issues.reporterId, filters.reporterId));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -277,7 +320,7 @@ export const issueService = {
 
     const total = Number(countResult[0]?.count ?? 0);
 
-    const items = results.map((issue) => {
+    const items = results.map(issue => {
       const { age, ageInDays } = computeAge(issue.createdAt!);
       const updatedAge = computeAge(issue.updatedAt || issue.createdAt!).age;
       return {
@@ -302,19 +345,23 @@ export const issueService = {
   /**
    * Update editable issue fields (officer action).
    */
-  async updateIssue(id: string, data: Partial<{
-    category: string;
-    departmentId: string;
-    priority: number;
-    urgencyExplanation: string;
-  }>) {
+  async updateIssue(
+    id: string,
+    data: Partial<{
+      category: string;
+      departmentId: string;
+      assignedTo: string;
+      priority: number;
+      urgencyExplanation: string;
+    }>
+  ) {
     const [updated] = await db
       .update(issues)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(issues.id, id))
       .returning();
 
-    if (!updated) throw new Error('Issue not found');
+    if (!updated) throw new Error("Issue not found");
     return updated;
   },
 
@@ -334,15 +381,18 @@ export const issueService = {
       );
 
     if (existing.length > 0) {
-      throw new Error('You are already supporting this issue');
+      throw new Error("You are already supporting this issue");
     }
 
     // Add supporter
     await db.insert(issueSupporters).values({ issueId, userId });
 
     // Increment count
-    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
-    if (!issue) throw new Error('Issue not found');
+    const [issue] = await db
+      .select()
+      .from(issues)
+      .where(eq(issues.id, issueId));
+    if (!issue) throw new Error("Issue not found");
 
     const [updated] = await db
       .update(issues)
@@ -359,10 +409,15 @@ export const issueService = {
   /**
    * Get map markers (public, coarsened locations).
    */
-  async getMapMarkers(filters?: { status?: string; category?: string; wardId?: string }) {
+  async getMapMarkers(filters?: {
+    status?: string;
+    category?: string;
+    wardId?: string;
+  }) {
     const conditions = [];
     if (filters?.status) conditions.push(eq(issues.status, filters.status));
-    if (filters?.category) conditions.push(eq(issues.category, filters.category));
+    if (filters?.category)
+      conditions.push(eq(issues.category, filters.category));
     if (filters?.wardId) conditions.push(eq(issues.wardId, filters.wardId));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -385,7 +440,7 @@ export const issueService = {
 
     const tierMap = await inactionService.batchComputeTiers(results);
 
-    return results.map((m) => {
+    return results.map(m => {
       const tierData = tierMap.get(m.id) || { tier: 0, inactionDays: 0 };
       return {
         ...m,
@@ -403,11 +458,21 @@ export const issueService = {
   async submitProof(issueId: string, note?: string) {
     const [updated] = await db
       .update(issues)
-      .set({ proofState: 'submitted', updatedAt: new Date() })
+      .set({ proofState: "submitted", updatedAt: new Date() })
       .where(eq(issues.id, issueId))
       .returning();
 
-    if (!updated) throw new Error('Issue not found');
+    if (!updated) throw new Error("Issue not found");
+    return updated;
+  },
+
+  async reviewProof(issueId: string, decision: "accepted" | "rejected") {
+    const [updated] = await db
+      .update(issues)
+      .set({ proofState: decision, updatedAt: new Date() })
+      .where(eq(issues.id, issueId))
+      .returning();
+    if (!updated) throw new Error("Issue not found");
     return updated;
   },
 };

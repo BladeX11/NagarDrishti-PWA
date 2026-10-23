@@ -15,13 +15,15 @@ const __dirname = path.dirname(__filename);
 
 export function createApp(): Express {
   const app = express();
+  app.set('trust proxy', 1);
 
   // Security Middleware
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }));
+  const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:5173').split(',').map((origin) => origin.trim()).filter(Boolean);
   app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    origin: allowedOrigins,
     credentials: true,
   }));
 

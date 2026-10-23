@@ -1,77 +1,448 @@
-import { useMemo, useState, useEffect, type ChangeEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { toast } from 'sonner';
-import { Activity, ArrowLeft, ArrowRight, Bell, Check, Camera, ChevronRight, Clock3, Compass, Droplet, Eye, FileCheck2, Languages, MapPin, ShieldCheck, Sparkles, ThumbsUp, Users, Vote, X, type LucideIcon } from 'lucide-react';
-import { issues as seedIssues, statusEvents, demoNotifications } from '../../data/seed';
-import { loadSubmittedIssues } from '../../data/localDemo';
-import { issuesApi, mapApi, type ApiIssue } from '../../lib/api';
-import type { Category, Issue, IssueStatus } from '../../types';
-import { categories } from '../../types';
-import { ActivityTimeline } from '../../components/shared/ActivityTimeline';
-import { Button } from '../../components/shared/Button';
-import { EmptyState } from '../../components/shared/EmptyState';
-import { FilterBar } from '../../components/shared/FilterBar';
-import { IssueCard } from '../../components/shared/IssueCard';
-import { MapView } from '../../components/shared/MapView';
-import { MetricCard } from '../../components/shared/MetricCard';
-import { DemoNote, PageHeader, Panel, CategoryIcon } from '../../components/shared/Primitives';
-import { StatusBadge } from '../../components/shared/StatusBadge';
+import { useMemo, useState, useEffect, type ChangeEvent } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
+import {
+  Activity,
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  Check,
+  Camera,
+  ChevronRight,
+  Clock3,
+  Compass,
+  Droplet,
+  Eye,
+  FileCheck2,
+  Languages,
+  MapPin,
+  ShieldCheck,
+  Sparkles,
+  ThumbsUp,
+  Users,
+  Vote,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  issues as seedIssues,
+  statusEvents,
+} from "../../data/seed";
+import { loadSubmittedIssues } from "../../data/localDemo";
+import { issuesApi, mapApi, notificationsApi, type ApiIssue } from "../../lib/api";
+import type { Category, Issue, IssueStatus } from "../../types";
+import { categories } from "../../types";
+import { ActivityTimeline } from "../../components/shared/ActivityTimeline";
+import { Button } from "../../components/shared/Button";
+import { EmptyState } from "../../components/shared/EmptyState";
+import { FilterBar } from "../../components/shared/FilterBar";
+import { IssueCard } from "../../components/shared/IssueCard";
+import { MapView } from "../../components/shared/MapView";
+import { MetricCard } from "../../components/shared/MetricCard";
+import {
+  DemoNote,
+  PageHeader,
+  Panel,
+  CategoryIcon,
+} from "../../components/shared/Primitives";
+import { StatusBadge } from "../../components/shared/StatusBadge";
+import {
+  clearReportDraft,
+  loadReportDraft,
+  queueSubmission,
+  saveReportDraft,
+} from "../../pwa/offlineQueue";
 
-const mine = seedIssues.filter(issue => ['ND-104','ND-105','ND-106','ND-109','ND-112','ND-116','ND-128'].includes(issue.id));
-function getSubmittedReports(): Issue[] { return loadSubmittedIssues(); }
+const mine = seedIssues.filter(issue =>
+  [
+    "ND-104",
+    "ND-105",
+    "ND-106",
+    "ND-109",
+    "ND-112",
+    "ND-116",
+    "ND-128",
+  ].includes(issue.id)
+);
+function getSubmittedReports(): Issue[] {
+  return loadSubmittedIssues();
+}
 const categoryNames: Record<Category, string> = {
-  'pothole/road':'Roads & potholes','garbage/waste':'Garbage & waste','drainage/sewage':'Drainage & sewage','water supply':'Water supply','streetlight/electrical':'Streetlights','stray animals':'Stray animals',encroachment:'Encroachment',other:'Other',
+  "pothole/road": "Roads & potholes",
+  "garbage/waste": "Garbage & waste",
+  "drainage/sewage": "Drainage & sewage",
+  "water supply": "Water supply",
+  "streetlight/electrical": "Streetlights",
+  "stray animals": "Stray animals",
+  encroachment: "Encroachment",
+  other: "Other",
 };
 
-export function CitizenHome(){
-  const alerts=seedIssues.filter(issue=>issue.status==='Claimed Resolved');
-  const actions:[string,string,LucideIcon,string,string][]=[['Report an issue','Add a local issue to the public record',Camera,'/citizen/report','bg-[#4F5B2A] text-white'],['Explore the map','See what neighbours are reporting',Compass,'/citizen/explore','bg-[#B8892D] text-white'],['My reports','Follow issues you have raised',FileCheck2,'/citizen/my-reports','bg-[#D8C9A8] text-[#2A3320]']];
-  return <div>
-    <section className="relative mb-8 overflow-hidden border-b-4 border-[#2A3320] bg-[#4F5B2A] px-5 py-8 text-white sm:px-8 md:py-10"><span className="absolute right-8 top-7 h-12 w-12 rounded-full border-4 border-[#B8892D]"/><span className="absolute right-24 top-14 hidden h-8 w-8 rotate-45 bg-[#D8C9A8] md:block"/><p className="mb-2 text-[10px] font-black uppercase tracking-[.2em] text-[#D8C9A8]">Tuesday · Pune civic pulse</p><h1 className="display-title max-w-xl text-3xl text-white sm:text-4xl">Good morning,<br/>Neel.</h1><p className="mt-3 text-sm font-bold text-[#D8C9A8]">Ward 12 · Pune</p><p className="mt-2 text-sm text-white/80">Here’s what’s happening around you.</p></section>
-    <div className="mb-9 grid gap-4 sm:grid-cols-3">{actions.map(([title,desc,Icon,to,color],i)=><a key={title} href={to} className={`group relative min-h-44 border-4 border-[#2A3320] p-5 shadow-[6px_6px_0px_0px_#2A3320] transition-all hover:-translate-y-1 ${color}`}><Icon size={25}/><h2 className="display-title mt-6 text-lg">{title}</h2><p className="mt-1 max-w-[18rem] text-xs opacity-75">{desc}</p><span className="absolute bottom-5 right-5 text-lg transition-transform group-hover:translate-x-1">→</span></a>)}</div>
-    {alerts.length>0&&<section className="mb-9 border-4 border-[#B8892D] bg-[#B8892D]/10 p-5 md:p-6"><div className="flex items-start gap-3"><Vote className="mt-0.5 shrink-0 text-[#B8892D]"/><div className="flex-1"><p className="display-title text-lg">{alerts.length} issue{alerts.length===1?'':'s'} need your vote</p><p className="mt-1 text-sm text-[#2A3320]/75">“{alerts[0].title}” was claimed resolved. Is it fixed?</p><a href={`/citizen/issue/${alerts[0].id}/verify`} className="mt-4 inline-block"><Button variant="gold">Verify now →</Button></a></div></div></section>}
-    <div className="grid gap-8 lg:grid-cols-[1.45fr_.85fr]">
-      <section><div className="mb-3 flex items-end justify-between border-b-4 border-[#2A3320] pb-3"><div><p className="eyebrow">Your neighbourhood</p><h2 className="display-title mt-1 text-xl">What’s happening nearby</h2></div><a href="/citizen/explore" className="text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] hover:underline">View map →</a></div><div className="divide-y-2 divide-[#E8E0D0] border-x-2 border-t-2 border-[#2A3320] bg-[#FDFBF7]">{seedIssues.slice(0,3).map(issue=><IssueCard key={issue.id} issue={issue} variant="compact"/>)}</div></section>
-      <section><div className="mb-3 border-b-4 border-[#2A3320] pb-3"><p className="eyebrow">At a glance</p><h2 className="display-title mt-1 text-xl">Ward 12 snapshot</h2></div><div className="grid grid-cols-3 border-4 border-[#2A3320] bg-[#D8C9A8]">{[['78%','SLA met'],['42','Active issues'],['3.2d','Avg. resolve']].map(([v,l])=><div key={l} className="border-r-2 border-[#2A3320] p-4 last:border-r-0"><p className="display-title text-2xl">{v}</p><p className="mt-1 text-[9px] font-black uppercase tracking-widest">{l}</p></div>)}</div><p className="mt-3 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/50">Demo data · Ward 12 snapshot</p><div className="mt-5 border-2 border-[#2A3320] bg-[#FDFBF7] p-4"><div className="flex items-center gap-2"><ShieldCheck size={16}/><p className="text-[10px] font-black uppercase tracking-wider">Privacy by design</p></div><p className="mt-2 text-xs leading-relaxed text-[#2A3320]/65">⌖ Public pins are coarsened. Your identity stays private.</p></div></section>
+export function CitizenHome() {
+  const alerts = seedIssues.filter(
+    issue => issue.status === "Claimed Resolved"
+  );
+  const actions: [string, string, LucideIcon, string, string][] = [
+    [
+      "Report an issue",
+      "Add a local issue to the public record",
+      Camera,
+      "/citizen/report",
+      "bg-[#4F5B2A] text-white",
+    ],
+    [
+      "Explore the map",
+      "See what neighbours are reporting",
+      Compass,
+      "/citizen/explore",
+      "bg-[#B8892D] text-white",
+    ],
+    [
+      "My reports",
+      "Follow issues you have raised",
+      FileCheck2,
+      "/citizen/my-reports",
+      "bg-[#D8C9A8] text-[#2A3320]",
+    ],
+  ];
+  return (
+    <div>
+      <section className="relative mb-8 overflow-hidden border-b-4 border-[#2A3320] bg-[#4F5B2A] px-5 py-8 text-white sm:px-8 md:py-10">
+        <span className="absolute right-8 top-7 h-12 w-12 rounded-full border-4 border-[#B8892D]" />
+        <span className="absolute right-24 top-14 hidden h-8 w-8 rotate-45 bg-[#D8C9A8] md:block" />
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[.2em] text-[#D8C9A8]">
+          Tuesday · Pune civic pulse
+        </p>
+        <h1 className="display-title max-w-xl text-3xl text-white sm:text-4xl">
+          Good morning,
+          <br />
+          Neel.
+        </h1>
+        <p className="mt-3 text-sm font-bold text-[#D8C9A8]">Ward 12 · Pune</p>
+        <p className="mt-2 text-sm text-white/80">
+          Here’s what’s happening around you.
+        </p>
+      </section>
+      <div className="mb-9 grid gap-4 sm:grid-cols-3">
+        {actions.map(([title, desc, Icon, to, color], i) => (
+          <a
+            key={title}
+            href={to}
+            className={`group relative min-h-44 border-4 border-[#2A3320] p-5 shadow-[6px_6px_0px_0px_#2A3320] transition-all hover:-translate-y-1 ${color}`}
+          >
+            <Icon size={25} />
+            <h2 className="display-title mt-6 text-lg">{title}</h2>
+            <p className="mt-1 max-w-[18rem] text-xs opacity-75">{desc}</p>
+            <span className="absolute bottom-5 right-5 text-lg transition-transform group-hover:translate-x-1">
+              →
+            </span>
+          </a>
+        ))}
+      </div>
+      {alerts.length > 0 && (
+        <section className="mb-9 border-4 border-[#B8892D] bg-[#B8892D]/10 p-5 md:p-6">
+          <div className="flex items-start gap-3">
+            <Vote className="mt-0.5 shrink-0 text-[#B8892D]" />
+            <div className="flex-1">
+              <p className="display-title text-lg">
+                {alerts.length} issue{alerts.length === 1 ? "" : "s"} need your
+                vote
+              </p>
+              <p className="mt-1 text-sm text-[#2A3320]/75">
+                “{alerts[0].title}” was claimed resolved. Is it fixed?
+              </p>
+              <a
+                href={`/citizen/issue/${alerts[0].id}/verify`}
+                className="mt-4 inline-block"
+              >
+                <Button variant="gold">Verify now →</Button>
+              </a>
+            </div>
+          </div>
+        </section>
+      )}
+      <div className="grid gap-8 lg:grid-cols-[1.45fr_.85fr]">
+        <section>
+          <div className="mb-3 flex items-end justify-between border-b-4 border-[#2A3320] pb-3">
+            <div>
+              <p className="eyebrow">Your neighbourhood</p>
+              <h2 className="display-title mt-1 text-xl">
+                What’s happening nearby
+              </h2>
+            </div>
+            <a
+              href="/citizen/explore"
+              className="text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] hover:underline"
+            >
+              View map →
+            </a>
+          </div>
+          <div className="divide-y-2 divide-[#E8E0D0] border-x-2 border-t-2 border-[#2A3320] bg-[#FDFBF7]">
+            {seedIssues.slice(0, 3).map(issue => (
+              <IssueCard key={issue.id} issue={issue} variant="compact" />
+            ))}
+          </div>
+        </section>
+        <section>
+          <div className="mb-3 border-b-4 border-[#2A3320] pb-3">
+            <p className="eyebrow">At a glance</p>
+            <h2 className="display-title mt-1 text-xl">Ward 12 snapshot</h2>
+          </div>
+          <div className="grid grid-cols-3 border-4 border-[#2A3320] bg-[#D8C9A8]">
+            {[
+              ["78%", "SLA met"],
+              ["42", "Active issues"],
+              ["3.2d", "Avg. resolve"],
+            ].map(([v, l]) => (
+              <div
+                key={l}
+                className="border-r-2 border-[#2A3320] p-4 last:border-r-0"
+              >
+                <p className="display-title text-2xl">{v}</p>
+                <p className="mt-1 text-[9px] font-black uppercase tracking-widest">
+                  {l}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/50">
+            Demo data · Ward 12 snapshot
+          </p>
+          <div className="mt-5 border-2 border-[#2A3320] bg-[#FDFBF7] p-4">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={16} />
+              <p className="text-[10px] font-black uppercase tracking-wider">
+                Privacy by design
+              </p>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-[#2A3320]/65">
+              ⌖ Public pins are coarsened. Your identity stays private.
+            </p>
+          </div>
+        </section>
+      </div>
+      <DemoNote />
     </div>
-    <DemoNote/>
-  </div>;
+  );
 }
 
-export function ExploreMap(){
-  const [filters,setFilters]=useState({status:'All',category:'All',ward:'All'});
-  const [selected,setSelected]=useState<Issue|null>(null);
-  const [submittedIssues]=useState(loadSubmittedIssues);const allIssues=useMemo(()=>[...seedIssues,...submittedIssues],[submittedIssues]);
-  const filtered=useMemo(()=>allIssues.filter(issue=>(filters.status==='All'||issue.status===filters.status)&&(filters.category==='All'||issue.category===filters.category)&&(filters.ward==='All'||issue.ward===filters.ward)),[filters,allIssues]);
-  return <div className="-mx-4 -mt-6 sm:-mx-6 lg:-mx-8 lg:-mt-9"><div className="sticky top-16 z-20 border-b-4 border-[#2A3320] bg-[#FDFBF7] px-4 py-3 sm:px-6 lg:top-[72px] lg:px-8"><FilterBar filters={[{key:'status',label:'Status',options:['All','Open','Triaged','Assigned','In Progress','Claimed Resolved','Verified Fixed','Reopened']},{key:'category',label:'Category',options:['All','pothole/road','garbage/waste','drainage/sewage','water supply','streetlight/electrical','stray animals','encroachment','other']},{key:'ward',label:'Ward',options:['All','Ward 11','Ward 12','Ward 14','Ward 15']}]} onFilterChange={(key,value)=>setFilters(old=>({...old,[key]:value}))}/></div>
-    <div className="relative px-4 py-5 sm:px-6 lg:px-8"><div className="mb-4 flex items-center justify-between"><div><p className="eyebrow">Explore Pune</p><p className="mt-1 text-xs font-medium text-[#2A3320]/65">{filtered.length} public reports in the area</p></div><a href="/citizen/report"><Button variant="gold" size="sm">＋ Report issue</Button></a></div><MapView issues={filtered} selectedId={selected?.id} onSelectIssue={setSelected} height="min(68vh, 700px)"/><p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/55">⌖ Public pins are coarsened for privacy</p>{selected&&<div className="fixed inset-x-0 bottom-[62px] z-[600] max-h-[55vh] overflow-auto border-t-4 border-[#2A3320] bg-[#F5EFE3] p-4 shadow-[0px_-6px_0px_0px_#2A3320] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[410px] sm:border-4 sm:shadow-[6px_6px_0px_0px_#2A3320]"><div className="mb-3 flex items-center justify-between"><p className="eyebrow">Issue preview</p><button aria-label="Close preview" className="border-2 border-[#2A3320] bg-white p-1" onClick={()=>setSelected(null)}><X size={16}/></button></div><IssueCard issue={selected} index={1}/><a href={`/citizen/issue/${selected.id}`} className="mt-3 block"><Button className="w-full">View full detail →</Button></a></div>}</div>
-  </div>;
+export function ExploreMap() {
+  const [filters, setFilters] = useState({
+    status: "All",
+    category: "All",
+    ward: "All",
+  });
+  const [selected, setSelected] = useState<Issue | null>(null);
+  const [submittedIssues] = useState(loadSubmittedIssues);
+  const allIssues = useMemo(
+    () => [...seedIssues, ...submittedIssues],
+    [submittedIssues]
+  );
+  const filtered = useMemo(
+    () =>
+      allIssues.filter(
+        issue =>
+          (filters.status === "All" || issue.status === filters.status) &&
+          (filters.category === "All" || issue.category === filters.category) &&
+          (filters.ward === "All" || issue.ward === filters.ward)
+      ),
+    [filters, allIssues]
+  );
+  return (
+    <div className="-mx-4 -mt-6 sm:-mx-6 lg:-mx-8 lg:-mt-9">
+      <div className="sticky top-16 z-20 border-b-4 border-[#2A3320] bg-[#FDFBF7] px-4 py-3 sm:px-6 lg:top-[72px] lg:px-8">
+        <FilterBar
+          filters={[
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                "All",
+                "Open",
+                "Triaged",
+                "Assigned",
+                "In Progress",
+                "Claimed Resolved",
+                "Verified Fixed",
+                "Reopened",
+              ],
+            },
+            {
+              key: "category",
+              label: "Category",
+              options: [
+                "All",
+                "pothole/road",
+                "garbage/waste",
+                "drainage/sewage",
+                "water supply",
+                "streetlight/electrical",
+                "stray animals",
+                "encroachment",
+                "other",
+              ],
+            },
+            {
+              key: "ward",
+              label: "Ward",
+              options: ["All", "Ward 11", "Ward 12", "Ward 14", "Ward 15"],
+            },
+          ]}
+          onFilterChange={(key, value) =>
+            setFilters(old => ({ ...old, [key]: value }))
+          }
+        />
+      </div>
+      <div className="relative px-4 py-5 sm:px-6 lg:px-8">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="eyebrow">Explore Pune</p>
+            <p className="mt-1 text-xs font-medium text-[#2A3320]/65">
+              {filtered.length} public reports in the area
+            </p>
+          </div>
+          <a href="/citizen/report">
+            <Button variant="gold" size="sm">
+              ＋ Report issue
+            </Button>
+          </a>
+        </div>
+        <MapView
+          issues={filtered}
+          selectedId={selected?.id}
+          onSelectIssue={setSelected}
+          height="min(68vh, 700px)"
+        />
+        <p className="mt-4 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/55">
+          ⌖ Public pins are coarsened for privacy
+        </p>
+        {selected && (
+          <div className="fixed inset-x-0 bottom-[62px] z-[600] max-h-[55vh] overflow-auto border-t-4 border-[#2A3320] bg-[#F5EFE3] p-4 shadow-[0px_-6px_0px_0px_#2A3320] sm:inset-x-auto sm:bottom-5 sm:right-5 sm:w-[410px] sm:border-4 sm:shadow-[6px_6px_0px_0px_#2A3320]">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="eyebrow">Issue preview</p>
+              <button
+                aria-label="Close preview"
+                className="border-2 border-[#2A3320] bg-white p-1"
+                onClick={() => setSelected(null)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <IssueCard issue={selected} index={1} />
+            <a href={`/citizen/issue/${selected.id}`} className="mt-3 block">
+              <Button className="w-full">View full detail →</Button>
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
-export function ReportFlow(){
-  const [step,setStep]=useState(0); const [category,setCategory]=useState<Category>('pothole/road'); const [description,setDescription]=useState(''); const [language,setLanguage]=useState('English'); const [photo,setPhoto]=useState(''); const [location,setLocation]=useState<[number,number]>([18.5204,73.8567]); const [submitted,setSubmitted]=useState(false); const [submittedId,setSubmittedId]=useState(''); const [selectedDuplicate,setSelectedDuplicate]=useState(false); const [submitting,setSubmitting]=useState(false);
-  const [aiSuggestion,setAiSuggestion]=useState<{category:Category;confidence:number;department:string;loading:boolean}>({category:'pothole/road',confidence:0,department:'Roads Department',loading:false});
-  const [apiDuplicates,setApiDuplicates]=useState<ApiIssue[]>([]);
+export function ReportFlow() {
+  const [step, setStep] = useState(0);
+  const [category, setCategory] = useState<Category>("pothole/road");
+  const [description, setDescription] = useState("");
+  const [language, setLanguage] = useState("English");
+  const [photo, setPhoto] = useState("");
+  const [location, setLocation] = useState<[number, number]>([
+    18.5204, 73.8567,
+  ]);
+  const [submitted, setSubmitted] = useState(false);
+  const [submittedId, setSubmittedId] = useState("");
+  const [submissionState, setSubmissionState] = useState<
+    "synced" | "queued" | null
+  >(null);
+  const [selectedDuplicate, setSelectedDuplicate] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<{
+    category: Category;
+    confidence: number;
+    department: string;
+    loading: boolean;
+  }>({
+    category: "pothole/road",
+    confidence: 0,
+    department: "Roads Department",
+    loading: false,
+  });
+  const [apiDuplicates, setApiDuplicates] = useState<ApiIssue[]>([]);
+  const [draftHydrated, setDraftHydrated] = useState(false);
 
-  async function runClassify(text:string){
-    if(!text.trim())return;
-    setAiSuggestion(s=>({...s,loading:true}));
-    try{
-      const res=await fetch('/api/ai/classify',{method:'POST',headers:{'Content-Type':'application/json','x-demo-role':localStorage.getItem('nd-role')||'citizen'},body:JSON.stringify({text})});
-      const json=await res.json();
-      if(json.success){
-        const {category:sugCat,confidence:conf}=json.data;
-        const sugCatTyped=sugCat as Category;
-        setAiSuggestion({category:sugCatTyped,confidence:conf,department:categoryDepartmentFor(sugCatTyped),loading:false});
+  useEffect(() => {
+    loadReportDraft()
+      .then(draft => {
+        if (!draft) return;
+        setStep(draft.step);
+        if (categories.includes(draft.category as Category))
+          setCategory(draft.category as Category);
+        setDescription(draft.description);
+        setLanguage(draft.language);
+        setPhoto(draft.photoDataUrl);
+        setLocation([draft.latitude, draft.longitude]);
+      })
+      .finally(() => setDraftHydrated(true));
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated || submitted) return;
+    void saveReportDraft({
+      step,
+      category,
+      description,
+      language,
+      photoDataUrl: photo,
+      latitude: location[0],
+      longitude: location[1],
+    });
+  }, [
+    draftHydrated,
+    submitted,
+    step,
+    category,
+    description,
+    language,
+    photo,
+    location,
+  ]);
+
+  async function runClassify(text: string) {
+    if (!text.trim()) return;
+    setAiSuggestion(s => ({ ...s, loading: true }));
+    try {
+      const res = await fetch("/api/ai/classify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-demo-role": localStorage.getItem("nd-role") || "citizen",
+        },
+        body: JSON.stringify({ text }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        const { category: sugCat, confidence: conf } = json.data;
+        const sugCatTyped = sugCat as Category;
+        setAiSuggestion({
+          category: sugCatTyped,
+          confidence: conf,
+          department: categoryDepartmentFor(sugCatTyped),
+          loading: false,
+        });
         setCategory(sugCatTyped);
       }
-    }catch{setAiSuggestion(s=>({...s,loading:false}));}
+    } catch {
+      setAiSuggestion(s => ({ ...s, loading: false }));
+    }
   }
 
-  const compressImage = (file: File, maxDimension = 1280, quality = 0.75): Promise<string> => {
-    return new Promise((resolve) => {
+  const compressImage = (
+    file: File,
+    maxDimension = 1280,
+    quality = 0.75
+  ): Promise<string> => {
+    return new Promise(resolve => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = e => {
         const img = new Image();
         img.onload = () => {
           let { width, height } = img;
@@ -84,13 +455,13 @@ export function ReportFlow(){
               height = maxDimension;
             }
           }
-          const canvas = document.createElement('canvas');
+          const canvas = document.createElement("canvas");
           canvas.width = width;
           canvas.height = height;
-          const ctx = canvas.getContext('2d');
+          const ctx = canvas.getContext("2d");
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', quality));
+            resolve(canvas.toDataURL("image/jpeg", quality));
           } else {
             resolve(String(e.target?.result));
           }
@@ -98,129 +469,1129 @@ export function ReportFlow(){
         img.onerror = () => resolve(String(e.target?.result));
         img.src = String(e.target?.result);
       };
-      reader.onerror = () => resolve('');
+      reader.onerror = () => resolve("");
       reader.readAsDataURL(file);
     });
   };
 
-  const onPhoto=async(event:ChangeEvent<HTMLInputElement>)=>{
-    const file=event.target.files?.[0];if(!file)return;
-    const dataUrl=await compressImage(file);
-    if(dataUrl){
+  const onPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const dataUrl = await compressImage(file);
+    if (dataUrl) {
       setPhoto(dataUrl);
-      runClassify(file.name.replace(/[._-]/g,' ')+' '+file.type);
+      runClassify(file.name.replace(/[._-]/g, " ") + " " + file.type);
     }
   };
-  const go=(next:number)=>setStep(Math.max(0,Math.min(6,next)));
-  const handleNext=async()=>{
-    if(step===3 && description.trim()) await runClassify(description);
-    if(step===4){
+  const go = (next: number) => setStep(Math.max(0, Math.min(6, next)));
+  const handleNext = async () => {
+    if (step === 3 && description.trim()) await runClassify(description);
+    if (step === 4) {
       // Fetch real similar issues from the DB when entering duplicates step
       setSelectedDuplicate(false);
-      issuesApi.list({category,limit:5}).then(r=>setApiDuplicates(r.items.slice(0,4))).catch(()=>{});
+      issuesApi
+        .list({ category, limit: 5 })
+        .then(r => setApiDuplicates(r.items.slice(0, 4)))
+        .catch(() => {});
     }
-    go(step+1);
+    go(step + 1);
   };
-  if(submitted)return <div className="mx-auto max-w-2xl py-8"><Panel className="border-4 px-6 py-12 text-center"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-4 border-[#2A3320] bg-[#4F5B2A] text-white"><Check size={30}/></div><p className="eyebrow mt-7">Report received</p><h1 className="display-title mt-2 text-3xl">Your report is visible</h1><p className="mt-3 text-sm text-[#2A3320]/65">Issue ID <b>{submittedId}</b>. Your report is now publicly visible with a coarsened location. Track progress in My Reports.</p><div className="mt-7 flex flex-wrap justify-center gap-3"><a href="/citizen/my-reports"><Button>View my report →</Button></a><a href="/citizen/explore"><Button variant="outline">Back to map →</Button></a></div></Panel></div>;
-  const steps=['Photo','Location','Category','Description','Suggestions','Duplicates','Review'];
-  return <div className="mx-auto max-w-3xl">
-    <PageHeader eyebrow="Community reporting" title="Report an issue" description="A short report helps your neighbourhood turn a concern into a visible, trackable action."/>
-    <div className="mb-8 flex items-center">{steps.map((name,index)=><div key={name} className="flex flex-1 items-center last:flex-none"><button aria-label={`Step ${index+1}: ${name}`} onClick={()=>index<step&&go(index)} className={`flex h-8 w-8 shrink-0 items-center justify-center border-2 border-[#2A3320] text-[10px] font-black ${index<step?'bg-[#4F5B2A] text-white':index===step?'border-4 bg-[#B8892D] text-[#2A3320]':'bg-[#E8E0D0] text-[#2A3320]/45'}`}>{index<step?<Check size={14}/>:index+1}</button>{index<steps.length-1&&<div className={`mx-1 h-[2px] flex-1 ${index<step?'bg-[#4F5B2A]':'bg-[#D8C9A8]'}`}/>}</div>)}</div>
-    <Panel className="border-4" padding="p-5 md:p-8"><div className="mb-6 flex items-center justify-between border-b-2 border-[#E8E0D0] pb-4"><div><p className="eyebrow">Step {step+1} of 7</p><h2 className="display-title mt-1 text-xl">{steps[step]}</h2></div><span className="text-[10px] font-black uppercase tracking-widest text-[#2A3320]/40">{Math.round((step+1)/7*100)}%</span></div>
-      {step===0&&<div><label className="flex min-h-64 cursor-pointer flex-col items-center justify-center border-4 border-dashed border-[#2A3320] bg-[#D8C9A8]/20 p-6 text-center transition-colors hover:bg-[#D8C9A8]/40">{photo?<img src={photo} alt="Selected report" className="max-h-56 max-w-full border-2 border-[#2A3320] object-contain"/>:<><Camera size={34}/><span className="display-title mt-4 text-xl">Tap to capture</span><span className="mt-2 text-xs text-[#2A3320]/60">or choose a photo from your gallery</span></>}<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={onPhoto}/></label><p className="mt-3 text-center text-[10px] font-medium text-[#2A3320]/60">Photo is recommended but optional. Original photo metadata is not shared publicly.</p></div>}
-      {step===1&&<div><div className="mb-4 flex items-center gap-2 border-2 border-[#B8892D] bg-[#B8892D]/10 p-3 text-xs font-bold"><MapPin size={16}/>Your pin will be coarsened for privacy. Tap the map to place it manually.</div><MapView issues={seedIssues.slice(0,7)} height="270px" pinPosition={location} onPinChange={setLocation}/><div className="mt-4 flex flex-wrap gap-2"><Button variant="gold" onClick={()=>{if(!navigator.geolocation){toast.error('Location services are not available in this browser.');return;}navigator.geolocation.getCurrentPosition(position=>{setLocation([Math.round(position.coords.latitude*200)/200,Math.round(position.coords.longitude*200)/200]);toast.success('Your approximate location is set.');},()=>toast.error('Location could not be accessed. You can place the pin manually.'),{enableHighAccuracy:false,timeout:8000,maximumAge:300000});}}>Use my location</Button><Button variant="outline" onClick={()=>toast.info('Tap anywhere on the map to place the approximate pin.')}>Place manually</Button></div><p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/55">⌖ Public pin shows approximate area only · Location is rounded before it is saved</p></div>}
-      {step===2&&<div><p className="mb-4 text-sm text-[#2A3320]/65">Choose the closest category. The AI suggestion is editable.</p><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{categories.map(item=><button key={item} onClick={()=>setCategory(item)} className={`flex min-h-28 flex-col items-start justify-between border-4 p-3 text-left shadow-[4px_4px_0px_0px_#2A3320] transition-all ${category===item?'bg-[#4F5B2A] text-white':'bg-[#FDFBF7] text-[#2A3320] hover:-translate-y-1'}`}><CategoryIcon category={item} size={22}/><span className="text-[9px] font-black uppercase tracking-wider">{categoryNames[item]}</span></button>)}</div>
-        {aiSuggestion.confidence>0?<div className="mt-5 border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-xs"><Sparkles size={14} className="mr-1 inline text-[#4F5B2A]"/><b>AI suggests:</b> <span className="font-black">{aiSuggestion.category}</span> <span className="text-[#2A3320]/60">({aiSuggestion.confidence}% confidence · M1-rules-v0.1)</span><button onClick={()=>setCategory(aiSuggestion.category)} className="ml-3 border border-[#4F5B2A] bg-[#4F5B2A] px-2 py-0.5 text-[9px] font-black uppercase text-white">Apply</button></div>:<div className="mt-5 border-2 border-[#D8C9A8] bg-[#D8C9A8]/40 p-3 text-xs text-[#2A3320]/60"><Sparkles size={14} className="mr-1 inline"/><i>Add a description first — AI will suggest the best category.</i></div>}
-      </div>}
-      {step===3&&<div><label htmlFor="description" className="eyebrow mb-2 block">Describe what you’re seeing (optional)</label><textarea id="description" maxLength={500} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Share helpful context: what happened, when it started, or how it affects the area…" className="input-block min-h-40 resize-y"/><div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex gap-2">{['English','हिन्दी','मराठी'].map(name=><button key={name} onClick={()=>setLanguage(name)} className={`border-2 border-[#2A3320] px-3 py-2 text-[10px] font-black ${language===name?'bg-[#4F5B2A] text-white':'bg-white'}`}><Languages size={12} className="mr-1 inline"/>{name}</button>)}</div><span className="text-[10px] font-bold text-[#2A3320]/55">{description.length} / 500</span></div></div>}
-      {step===4&&<div className="border-4 border-[#B8892D] bg-[#D8C9A8]/20 p-5 md:p-6">
-        <div className="flex items-center gap-2"><Sparkles size={19} className="text-[#B8892D]"/><p className="display-title text-lg">{aiSuggestion.loading?'Classifying…':'AI suggestions'}</p></div>
-        <p className="mt-1 text-xs leading-relaxed text-[#2A3320]/65">Based on your photo and description. You can change any suggestion.</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3"><p className="eyebrow">Category</p><p className="mt-2 text-sm font-black">{category} ✓</p></div>
-          <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3"><p className="eyebrow">Department</p><p className="mt-2 text-sm font-black">{aiSuggestion.confidence>0?aiSuggestion.department:categoryDepartmentFor(category)} ✓</p></div>
-          <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3"><p className="eyebrow">Urgency</p><p className="mt-2 text-sm font-black">Tier 2 · High ✓</p></div>
-        </div>
-        <div className="mt-5 flex flex-wrap justify-between gap-3 border-t-2 border-[#D8C9A8] pt-4 text-[10px] font-bold uppercase tracking-widest">
-          <span>Confidence: {aiSuggestion.confidence>0?aiSuggestion.confidence:87}%</span><span>Model: M1 v0.3</span>
-        </div>
-        {aiSuggestion.confidence>0&&<p className="mt-3 text-[10px] text-[#2A3320]/55">Not right? Go back to step 3 and update your category choice.</p>}
-      </div>}
-      {step===5&&<div><p className="mb-4 text-sm text-[#2A3320]/65">These reports look similar. Add your support to an existing report, or continue with a new one.</p>
-        {apiDuplicates.length===0?<p className="py-6 text-center text-sm text-[#2A3320]/50">No similar reports found nearby — your issue is unique.</p>:
-        <div className="space-y-3">{apiDuplicates.map((issue:ApiIssue)=><div key={issue.id} className="border-2 border-[#2A3320] bg-[#FDFBF7]">
-          <div className="px-4 py-3"><p className="font-black text-sm">{issue.title}</p><p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/60">{issue.category} · {issue.wardId||'Ward ?'} · {issue.age}</p></div>
-          <div className="flex items-center gap-3 px-3 pb-3">
-            <button onClick={()=>{setSelectedDuplicate(true);toast.success('Support added to the existing report.');issuesApi.support(issue.id).catch(()=>{});}} className="border-2 border-[#2A3320] bg-[#B8892D] px-3 py-2 text-[9px] font-black uppercase tracking-wider text-white">＋ Support this instead</button>
-            <span className="text-[9px] font-black uppercase text-[#4F5B2A]">{issue.status}</span>
+  if (submitted)
+    return (
+      <div className="mx-auto max-w-2xl py-8">
+        <Panel className="border-4 px-6 py-12 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-4 border-[#2A3320] bg-[#4F5B2A] text-white">
+            <Check size={30} />
           </div>
-        </div>)}</div>}
-        <button onClick={()=>{setSelectedDuplicate(false);go(6);}} className="mt-4 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] underline">{selectedDuplicate?'Continue anyway →':'None of these — submit new report →'}</button>
-      </div>}
-      {step===6&&<div><div className="grid gap-5 sm:grid-cols-[150px_1fr]">{photo&&<img src={photo} alt="Report attachment preview" className="h-36 w-full border-4 border-[#2A3320] object-cover grayscale"/>}<div className="space-y-4"><div><p className="eyebrow">Category & service</p><p className="mt-1 font-black">{category} · {categoryDepartmentFor(category)}</p></div><div><p className="eyebrow">Approximate location</p><p className="mt-1 font-bold">Ward 12, Pune · Coarsened public pin</p></div><div><p className="eyebrow">Description</p><p className="mt-1 text-sm">{description||'No additional description provided.'}</p></div></div></div><div className="mt-5"><MapView issues={[]} height="130px" pinPosition={location}/></div><div className="mt-6 border-2 border-[#B8892D] bg-[#B8892D]/10 p-4 text-xs leading-relaxed"><b>Privacy preview:</b> Public: approximate location, category, status. Private: your identity, exact coordinates, and original photo metadata.</div></div>}
-      <div className="mt-8 flex flex-wrap justify-between gap-3 border-t-2 border-[#E8E0D0] pt-5">{step>0?<Button variant="outline" onClick={()=>go(step-1)}><ArrowLeft size={14}/>Back</Button>:<span/>}{step<6?<Button onClick={handleNext} disabled={aiSuggestion.loading}>{aiSuggestion.loading?'Classifying...':'Continue'} {!aiSuggestion.loading&&<ArrowRight size={14}/>}</Button>:<Button size="lg" disabled={submitting} onClick={async()=>{setSubmitting(true);try{const langCode=language==="\u0939\u093f\u0928\u094d\u0926\u0940"?"hi":language==="\u092e\u0930\u093e\u0920\u0940"?"mr":"en";const created=await issuesApi.create({title:`${categoryNames[category]} reported in Pune`,description:description||`A ${categoryNames[category].toLowerCase()} issue.`,category,language:langCode,latitude:location[0],longitude:location[1],photoDataUrl:photo||undefined});setSubmittedId(created.publicRef);setSubmitted(true);toast.success(`Issue ${created.publicRef} is on the public map.`);}catch(e:any){toast.error(e.message||"Submit failed.");}finally{setSubmitting(false);}}}>{submitting?"Submitting...":"Submit report"}</Button>}</div>
-    </Panel><DemoNote/></div>;
+          <p className="eyebrow mt-7">
+            {submissionState === "queued" ? "Saved offline" : "Report received"}
+          </p>
+          <h1 className="display-title mt-2 text-3xl">
+            {submissionState === "queued"
+              ? "Waiting to upload"
+              : "Your report is visible"}
+          </h1>
+          <p className="mt-3 text-sm text-[#2A3320]/65">
+            Issue ID <b>{submittedId}</b>.{" "}
+            {submissionState === "queued"
+              ? "The report is stored securely on this device and will upload automatically when the connection returns."
+              : "Your report is now publicly visible with a coarsened location. Track progress in My Reports."}
+          </p>
+          <div className="mt-7 flex flex-wrap justify-center gap-3">
+            <a href="/citizen/my-reports">
+              <Button>View my report →</Button>
+            </a>
+            <a href="/citizen/explore">
+              <Button variant="outline">Back to map →</Button>
+            </a>
+          </div>
+        </Panel>
+      </div>
+    );
+  const steps = [
+    "Photo",
+    "Location",
+    "Category",
+    "Description",
+    "Suggestions",
+    "Duplicates",
+    "Review",
+  ];
+  return (
+    <div className="mx-auto max-w-3xl">
+      <PageHeader
+        eyebrow="Community reporting"
+        title="Report an issue"
+        description="A short report helps your neighbourhood turn a concern into a visible, trackable action."
+      />
+      <div className="mb-8 flex items-center">
+        {steps.map((name, index) => (
+          <div key={name} className="flex flex-1 items-center last:flex-none">
+            <button
+              aria-label={`Step ${index + 1}: ${name}`}
+              onClick={() => index < step && go(index)}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center border-2 border-[#2A3320] text-[10px] font-black ${index < step ? "bg-[#4F5B2A] text-white" : index === step ? "border-4 bg-[#B8892D] text-[#2A3320]" : "bg-[#E8E0D0] text-[#2A3320]/45"}`}
+            >
+              {index < step ? <Check size={14} /> : index + 1}
+            </button>
+            {index < steps.length - 1 && (
+              <div
+                className={`mx-1 h-[2px] flex-1 ${index < step ? "bg-[#4F5B2A]" : "bg-[#D8C9A8]"}`}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+      <Panel className="border-4" padding="p-5 md:p-8">
+        <div className="mb-6 flex items-center justify-between border-b-2 border-[#E8E0D0] pb-4">
+          <div>
+            <p className="eyebrow">Step {step + 1} of 7</p>
+            <h2 className="display-title mt-1 text-xl">{steps[step]}</h2>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-[#2A3320]/40">
+            {Math.round(((step + 1) / 7) * 100)}%
+          </span>
+        </div>
+        {step === 0 && (
+          <div>
+            <label className="flex min-h-64 cursor-pointer flex-col items-center justify-center border-4 border-dashed border-[#2A3320] bg-[#D8C9A8]/20 p-6 text-center transition-colors hover:bg-[#D8C9A8]/40">
+              {photo ? (
+                <img
+                  src={photo}
+                  alt="Selected report"
+                  className="max-h-56 max-w-full border-2 border-[#2A3320] object-contain"
+                />
+              ) : (
+                <>
+                  <Camera size={34} />
+                  <span className="display-title mt-4 text-xl">
+                    Tap to capture
+                  </span>
+                  <span className="mt-2 text-xs text-[#2A3320]/60">
+                    or choose a photo from your gallery
+                  </span>
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                onChange={onPhoto}
+              />
+            </label>
+            <p className="mt-3 text-center text-[10px] font-medium text-[#2A3320]/60">
+              Photo is recommended but optional. Original photo metadata is not
+              shared publicly.
+            </p>
+          </div>
+        )}
+        {step === 1 && (
+          <div>
+            <div className="mb-4 flex items-center gap-2 border-2 border-[#B8892D] bg-[#B8892D]/10 p-3 text-xs font-bold">
+              <MapPin size={16} />
+              Your pin will be coarsened for privacy. Tap the map to place it
+              manually.
+            </div>
+            <MapView
+              issues={seedIssues.slice(0, 7)}
+              height="270px"
+              pinPosition={location}
+              onPinChange={setLocation}
+            />
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                variant="gold"
+                onClick={() => {
+                  if (!navigator.geolocation) {
+                    toast.error(
+                      "Location services are not available in this browser."
+                    );
+                    return;
+                  }
+                  navigator.geolocation.getCurrentPosition(
+                    position => {
+                      setLocation([
+                        Math.round(position.coords.latitude * 200) / 200,
+                        Math.round(position.coords.longitude * 200) / 200,
+                      ]);
+                      toast.success("Your approximate location is set.");
+                    },
+                    () =>
+                      toast.error(
+                        "Location could not be accessed. You can place the pin manually."
+                      ),
+                    {
+                      enableHighAccuracy: false,
+                      timeout: 8000,
+                      maximumAge: 300000,
+                    }
+                  );
+                }}
+              >
+                Use my location
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  toast.info(
+                    "Tap anywhere on the map to place the approximate pin."
+                  )
+                }
+              >
+                Place manually
+              </Button>
+            </div>
+            <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/55">
+              ⌖ Public pin shows approximate area only · Location is rounded
+              before it is saved
+            </p>
+          </div>
+        )}
+        {step === 2 && (
+          <div>
+            <p className="mb-4 text-sm text-[#2A3320]/65">
+              Choose the closest category. The AI suggestion is editable.
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {categories.map(item => (
+                <button
+                  key={item}
+                  onClick={() => setCategory(item)}
+                  className={`flex min-h-28 flex-col items-start justify-between border-4 p-3 text-left shadow-[4px_4px_0px_0px_#2A3320] transition-all ${category === item ? "bg-[#4F5B2A] text-white" : "bg-[#FDFBF7] text-[#2A3320] hover:-translate-y-1"}`}
+                >
+                  <CategoryIcon category={item} size={22} />
+                  <span className="text-[9px] font-black uppercase tracking-wider">
+                    {categoryNames[item]}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {aiSuggestion.confidence > 0 ? (
+              <div className="mt-5 border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-xs">
+                <Sparkles size={14} className="mr-1 inline text-[#4F5B2A]" />
+                <b>AI suggests:</b>{" "}
+                <span className="font-black">{aiSuggestion.category}</span>{" "}
+                <span className="text-[#2A3320]/60">
+                  ({aiSuggestion.confidence}% confidence · M1-rules-v0.1)
+                </span>
+                <button
+                  onClick={() => setCategory(aiSuggestion.category)}
+                  className="ml-3 border border-[#4F5B2A] bg-[#4F5B2A] px-2 py-0.5 text-[9px] font-black uppercase text-white"
+                >
+                  Apply
+                </button>
+              </div>
+            ) : (
+              <div className="mt-5 border-2 border-[#D8C9A8] bg-[#D8C9A8]/40 p-3 text-xs text-[#2A3320]/60">
+                <Sparkles size={14} className="mr-1 inline" />
+                <i>
+                  Add a description first — AI will suggest the best category.
+                </i>
+              </div>
+            )}
+          </div>
+        )}
+        {step === 3 && (
+          <div>
+            <label htmlFor="description" className="eyebrow mb-2 block">
+              Describe what you’re seeing (optional)
+            </label>
+            <textarea
+              id="description"
+              maxLength={500}
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Share helpful context: what happened, when it started, or how it affects the area…"
+              className="input-block min-h-40 resize-y"
+            />
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex gap-2">
+                {["English", "हिन्दी", "मराठी"].map(name => (
+                  <button
+                    key={name}
+                    onClick={() => setLanguage(name)}
+                    className={`border-2 border-[#2A3320] px-3 py-2 text-[10px] font-black ${language === name ? "bg-[#4F5B2A] text-white" : "bg-white"}`}
+                  >
+                    <Languages size={12} className="mr-1 inline" />
+                    {name}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[10px] font-bold text-[#2A3320]/55">
+                {description.length} / 500
+              </span>
+            </div>
+          </div>
+        )}
+        {step === 4 && (
+          <div className="border-4 border-[#B8892D] bg-[#D8C9A8]/20 p-5 md:p-6">
+            <div className="flex items-center gap-2">
+              <Sparkles size={19} className="text-[#B8892D]" />
+              <p className="display-title text-lg">
+                {aiSuggestion.loading ? "Classifying…" : "AI suggestions"}
+              </p>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-[#2A3320]/65">
+              Based on your photo and description. You can change any
+              suggestion.
+            </p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3">
+                <p className="eyebrow">Category</p>
+                <p className="mt-2 text-sm font-black">{category} ✓</p>
+              </div>
+              <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3">
+                <p className="eyebrow">Department</p>
+                <p className="mt-2 text-sm font-black">
+                  {aiSuggestion.confidence > 0
+                    ? aiSuggestion.department
+                    : categoryDepartmentFor(category)}{" "}
+                  ✓
+                </p>
+              </div>
+              <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3">
+                <p className="eyebrow">Urgency</p>
+                <p className="mt-2 text-sm font-black">Tier 2 · High ✓</p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap justify-between gap-3 border-t-2 border-[#D8C9A8] pt-4 text-[10px] font-bold uppercase tracking-widest">
+              <span>
+                Confidence:{" "}
+                {aiSuggestion.confidence > 0 ? aiSuggestion.confidence : 87}%
+              </span>
+              <span>Model: M1 v0.3</span>
+            </div>
+            {aiSuggestion.confidence > 0 && (
+              <p className="mt-3 text-[10px] text-[#2A3320]/55">
+                Not right? Go back to step 3 and update your category choice.
+              </p>
+            )}
+          </div>
+        )}
+        {step === 5 && (
+          <div>
+            <p className="mb-4 text-sm text-[#2A3320]/65">
+              These reports look similar. Add your support to an existing
+              report, or continue with a new one.
+            </p>
+            {apiDuplicates.length === 0 ? (
+              <p className="py-6 text-center text-sm text-[#2A3320]/50">
+                No similar reports found nearby — your issue is unique.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {apiDuplicates.map((issue: ApiIssue) => (
+                  <div
+                    key={issue.id}
+                    className="border-2 border-[#2A3320] bg-[#FDFBF7]"
+                  >
+                    <div className="px-4 py-3">
+                      <p className="font-black text-sm">{issue.title}</p>
+                      <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/60">
+                        {issue.category} · {issue.wardId || "Ward ?"} ·{" "}
+                        {issue.age}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 px-3 pb-3">
+                      <button
+                        onClick={() => {
+                          setSelectedDuplicate(true);
+                          toast.success(
+                            "Support added to the existing report."
+                          );
+                          issuesApi.support(issue.id).catch(() => {});
+                        }}
+                        className="border-2 border-[#2A3320] bg-[#B8892D] px-3 py-2 text-[9px] font-black uppercase tracking-wider text-white"
+                      >
+                        ＋ Support this instead
+                      </button>
+                      <span className="text-[9px] font-black uppercase text-[#4F5B2A]">
+                        {issue.status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setSelectedDuplicate(false);
+                go(6);
+              }}
+              className="mt-4 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] underline"
+            >
+              {selectedDuplicate
+                ? "Continue anyway →"
+                : "None of these — submit new report →"}
+            </button>
+          </div>
+        )}
+        {step === 6 && (
+          <div>
+            <div className="grid gap-5 sm:grid-cols-[150px_1fr]">
+              {photo && (
+                <img
+                  src={photo}
+                  alt="Report attachment preview"
+                  className="h-36 w-full border-4 border-[#2A3320] object-cover grayscale"
+                />
+              )}
+              <div className="space-y-4">
+                <div>
+                  <p className="eyebrow">Category & service</p>
+                  <p className="mt-1 font-black">
+                    {category} · {categoryDepartmentFor(category)}
+                  </p>
+                </div>
+                <div>
+                  <p className="eyebrow">Approximate location</p>
+                  <p className="mt-1 font-bold">
+                    Ward 12, Pune · Coarsened public pin
+                  </p>
+                </div>
+                <div>
+                  <p className="eyebrow">Description</p>
+                  <p className="mt-1 text-sm">
+                    {description || "No additional description provided."}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-5">
+              <MapView issues={[]} height="130px" pinPosition={location} />
+            </div>
+            <div className="mt-6 border-2 border-[#B8892D] bg-[#B8892D]/10 p-4 text-xs leading-relaxed">
+              <b>Privacy preview:</b> Public: approximate location, category,
+              status. Private: your identity, exact coordinates, and original
+              photo metadata.
+            </div>
+          </div>
+        )}
+        <div className="mt-8 flex flex-wrap justify-between gap-3 border-t-2 border-[#E8E0D0] pt-5">
+          {step > 0 ? (
+            <Button variant="outline" onClick={() => go(step - 1)}>
+              <ArrowLeft size={14} />
+              Back
+            </Button>
+          ) : (
+            <span />
+          )}
+          {step < 6 ? (
+            <Button onClick={handleNext} disabled={aiSuggestion.loading}>
+              {aiSuggestion.loading ? "Classifying…" : "Continue"}{" "}
+              {!aiSuggestion.loading && <ArrowRight size={14} />}
+            </Button>
+          ) : (
+            <Button
+              size="lg"
+              disabled={submitting}
+              onClick={async () => {
+                setSubmitting(true);
+                const langCode =
+                  language === "\u0939\u093f\u0928\u094d\u0926\u0940"
+                    ? "hi"
+                    : language === "\u092e\u0930\u093e\u0920\u0940"
+                      ? "mr"
+                      : "en";
+                const payload = {
+                  title: `${categoryNames[category]} reported in Pune`,
+                  description:
+                    description ||
+                    `A ${categoryNames[category].toLowerCase()} issue.`,
+                  category,
+                  language: langCode,
+                  latitude: location[0],
+                  longitude: location[1],
+                  photoDataUrl: photo || undefined,
+                };
+                try {
+                  if (!navigator.onLine) {
+                    await queueSubmission(payload);
+                    await clearReportDraft();
+                    setSubmittedId(
+                      "OFFLINE-" + Date.now().toString(36).toUpperCase()
+                    );
+                    setSubmissionState("queued");
+                    setSubmitted(true);
+                    toast.success(
+                      "Report saved on this device. It will upload when you reconnect."
+                    );
+                    return;
+                  }
+                  const created = await issuesApi.create(payload);
+                  await clearReportDraft();
+                  setSubmittedId(created.publicRef);
+                  setSubmissionState("synced");
+                  setSubmitted(true);
+                  toast.success(
+                    `Issue ${created.publicRef} is on the public map.`
+                  );
+                } catch (e: any) {
+                  if (!navigator.onLine || e instanceof TypeError) {
+                    try {
+                      await queueSubmission(payload);
+                      await clearReportDraft();
+                      setSubmittedId(
+                        "OFFLINE-" + Date.now().toString(36).toUpperCase()
+                      );
+                      setSubmissionState("queued");
+                      setSubmitted(true);
+                      toast.info(
+                        "Connection lost. Report saved and queued for upload."
+                      );
+                    } catch {
+                      toast.error("Report could not be saved on this device.");
+                    }
+                  } else toast.error(e.message || "Submit failed.");
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            >
+              {submitting ? "Submitting…" : "Submit report"}
+            </Button>
+          )}
+        </div>
+      </Panel>
+      <DemoNote />
+    </div>
+  );
 }
-function categoryDepartmentFor(category:Category){return category==='garbage/waste'?'Solid Waste Management':category==='streetlight/electrical'?'Electrical Department':category==='water supply'||category==='drainage/sewage'?'Drainage & Water':'Roads Department';}
+function categoryDepartmentFor(category: Category) {
+  return category === "garbage/waste"
+    ? "Solid Waste Management"
+    : category === "streetlight/electrical"
+      ? "Electrical Department"
+      : category === "water supply" || category === "drainage/sewage"
+        ? "Drainage & Water"
+        : "Roads Department";
+}
 
-export function MyReports(){
-  const [filter,setFilter]=useState('All');
-  const [apiIssues,setApiIssues]=useState<ApiIssue[]>([]);
-  const filters=['All','Open','In Progress','Claimed Resolved','Verified Fixed','Reopened'];
-  useEffect(()=>{ issuesApi.list({limit:50}).then(r=>setApiIssues(r.items)).catch(()=>{}); },[]);
-  const allReports=apiIssues.length>0?apiIssues:[...mine,...getSubmittedReports()];
-  const data=allReports.filter((issue:any)=>filter==='All'||issue.status===filter).sort((a:any,b:any)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  return <div><PageHeader eyebrow="Citizen space" title="My reports" description="Follow the issues you've raised and see what has changed." action={<span className="border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[10px] font-black uppercase tracking-wider">{allReports.length} reports</span>}/><div className="mb-5 flex flex-wrap gap-2">{filters.map(name=><button key={name} onClick={()=>setFilter(name)} className={`border-2 border-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-wider ${filter===name?'bg-[#4F5B2A] text-white shadow-[3px_3px_0px_0px_#2A3320]':'bg-[#FDFBF7]'}`}>{name}</button>)}</div>{data.length?<div className="grid gap-5 md:grid-cols-2">{data.map((issue:any,index:number)=><div key={issue.id||issue.publicRef}><IssueCard issue={issue} index={index}/><p className="mt-3 flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#4F5B2A]"><i className="h-2 w-2 rounded-full bg-[#4F5B2A]"/>{apiIssues.length>0?'Live from database':'Submitted · Synced'}</p></div>)}</div>:<EmptyState icon={Camera} title="No reports in this view" description="Try a different status filter, or report the first issue in your neighbourhood." action={{label:'Report an issue →',href:'/citizen/report'}}/>}<DemoNote/></div>;
+export function MyReports() {
+  const [filter, setFilter] = useState("All");
+  const [apiIssues, setApiIssues] = useState<ApiIssue[]>([]);
+  const filters = [
+    "All",
+    "Open",
+    "In Progress",
+    "Claimed Resolved",
+    "Verified Fixed",
+    "Reopened",
+  ];
+  useEffect(() => {
+    let active = true;
+    const refresh = () =>
+      issuesApi
+        .listMine({ limit: 50 })
+        .then(r => {
+          if (active) setApiIssues(r.items);
+        })
+        .catch(() => {});
+    void refresh();
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener("online", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("online", refresh);
+    };
+  }, []);
+  const allReports =
+    apiIssues.length > 0 ? apiIssues : [...mine, ...getSubmittedReports()];
+  const data = allReports
+    .filter((issue: any) => filter === "All" || issue.status === filter)
+    .sort((a: any, b: any) =>
+      (b.createdAt || "").localeCompare(a.createdAt || "")
+    );
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Citizen space"
+        title="My reports"
+        description="Follow the issues you've raised and see what has changed."
+        action={
+          <span className="border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[10px] font-black uppercase tracking-wider">
+            {allReports.length} reports
+          </span>
+        }
+      />
+      <div className="mb-5 flex flex-wrap gap-2">
+        {filters.map(name => (
+          <button
+            key={name}
+            onClick={() => setFilter(name)}
+            className={`border-2 border-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-wider ${filter === name ? "bg-[#4F5B2A] text-white shadow-[3px_3px_0px_0px_#2A3320]" : "bg-[#FDFBF7]"}`}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      {data.length ? (
+        <div className="grid gap-5 md:grid-cols-2">
+          {data.map((issue: any, index: number) => (
+            <div key={issue.id || issue.publicRef}>
+              <IssueCard issue={issue} index={index} />
+              <p className="mt-3 flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#4F5B2A]">
+                <i className="h-2 w-2 rounded-full bg-[#4F5B2A]" />
+                {apiIssues.length > 0
+                  ? "Live from database"
+                  : "Submitted · Synced"}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={Camera}
+          title="No reports in this view"
+          description="Try a different status filter, or report the first issue in your neighbourhood."
+          action={{ label: "Report an issue →", href: "/citizen/report" }}
+        />
+      )}
+      <DemoNote />
+    </div>
+  );
 }
-export function CitizenIssueDetail(){
-  const {id='ND-104'}=useParams();
-  const matchedSeed=seedIssues.find(item=>item.id===id)||getSubmittedReports().find(item=>item.id===id);
-  const [apiIssue,setApiIssue]=useState<any>();
-  const [loading,setLoading]=useState(!matchedSeed);
-  const [supported,setSupported]=useState(false);
-  useEffect(()=>{ 
-    if(!id) return;
-    issuesApi.get(id)
-      .then((r:any)=>{ if(r) setApiIssue(r); })
-      .catch((err)=>{ console.error('Failed to fetch issue:', err); })
-      .finally(()=>setLoading(false)); 
-  },[id]);
-  const issue:any=apiIssue||matchedSeed;
-  if(loading) return <div className="p-8 text-center"><span className="border-4 border-[#2A3320] bg-[#D8C9A8] px-5 py-4 text-[10px] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#2A3320]">Loading issue...</span></div>;
-  if(!issue) return <div className="p-8 text-center"><p className="display-title text-xl text-[#2A3320]">Issue not found</p><p className="mt-2 text-xs text-[#2A3320]/60">Could not find issue details for "{id}".</p><a href="/citizen/my-reports" className="mt-4 inline-block border-2 border-[#2A3320] bg-[#4F5B2A] px-4 py-2 text-[10px] font-black uppercase text-white">Back to my reports</a></div>;
-  
-  const events = (apiIssue?.events && apiIssue.events.length > 0)
-    ? apiIssue.events
-    : statusEvents.filter((event: any) => event.issueId === issue.id || event.issueId === issue.publicRef);
-  const beforeMedia=apiIssue?.media?.find((m:any)=>m.type==='before');
-  const afterMedia=apiIssue?.media?.find((m:any)=>m.type==='proof'||m.type==='after');
+export function CitizenIssueDetail() {
+  const { id = "ND-104" } = useParams();
+  const matchedSeed =
+    seedIssues.find(item => item.id === id) ||
+    getSubmittedReports().find(item => item.id === id);
+  const [apiIssue, setApiIssue] = useState<any>();
+  const [loading, setLoading] = useState(!matchedSeed);
+  const [supported, setSupported] = useState(false);
+  useEffect(() => {
+    if (!id) return;
+    issuesApi
+      .get(id)
+      .then((r: any) => {
+        if (r) setApiIssue(r);
+      })
+      .catch(err => {
+        console.error("Failed to fetch issue:", err);
+      })
+      .finally(() => setLoading(false));
+  }, [id]);
+  const issue: any = apiIssue || matchedSeed;
+  if (loading)
+    return (
+      <div className="p-8 text-center">
+        <span className="border-4 border-[#2A3320] bg-[#D8C9A8] px-5 py-4 text-[10px] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#2A3320]">
+          Loading issue...
+        </span>
+      </div>
+    );
+  if (!issue)
+    return (
+      <div className="p-8 text-center">
+        <p className="display-title text-xl text-[#2A3320]">Issue not found</p>
+        <p className="mt-2 text-xs text-[#2A3320]/60">
+          Could not find issue details for "{id}".
+        </p>
+        <a
+          href="/citizen/my-reports"
+          className="mt-4 inline-block border-2 border-[#2A3320] bg-[#4F5B2A] px-4 py-2 text-[10px] font-black uppercase text-white"
+        >
+          Back to my reports
+        </a>
+      </div>
+    );
+
+  const events =
+    apiIssue?.events && apiIssue.events.length > 0
+      ? apiIssue.events
+      : statusEvents.filter(
+          (event: any) =>
+            event.issueId === issue.id || event.issueId === issue.publicRef
+        );
+  const beforeMedia = apiIssue?.media?.find((m: any) => m.type === "before");
+  const afterMedia = apiIssue?.media?.find(
+    (m: any) => m.type === "proof" || m.type === "after"
+  );
   const votes = issue.verificationVotes ?? { fixed: 0, notFixed: 0, unsure: 0 };
-  const supportersCount = (apiIssue?.supporterCount ?? issue.supporters ?? 0) + (supported ? 1 : 0);
+  const supportersCount =
+    (apiIssue?.supporterCount ?? issue.supporters ?? 0) + (supported ? 1 : 0);
 
-  return <div><a href="/citizen/my-reports" className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] hover:underline"><ArrowLeft size={14}/>Back to my reports</a><div className="mb-5 border-b-4 border-[#2A3320] pb-5"><div className="mb-4 flex flex-wrap items-center gap-3"><span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#4F5B2A]"><CategoryIcon category={issue.category}/>{issue.category}</span><StatusBadge status={issue.status}/></div><h1 className="display-title max-w-4xl text-2xl md:text-4xl">{issue.title}</h1><p className="mt-3 text-xs font-medium text-[#2A3320]/60">Issue {issue.publicRef||issue.id} · Registered {issue.age || 'Recently'} · Updated {issue.updatedAge || issue.age || 'Recently'} · {issue.wardId||issue.ward||'Ward 12'} <span className="mx-1">·</span>{supportersCount} supporters</p></div>
-    <div className="grid gap-7 lg:grid-cols-[1.15fr_.85fr]"><div className="space-y-7"><section><p className="eyebrow mb-3">Approximate location</p><MapView issues={[issue]} selectedId={issue.id} height="250px"/><p className="mt-3 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/55">⌖ Public pins are coarsened</p></section><section><p className="eyebrow mb-3">Description</p><Panel className="border-4"><p className="text-sm leading-relaxed">{issue.description||'No description provided.'}</p></Panel></section><section><p className="eyebrow mb-3">Report media</p><div className="grid grid-cols-2 gap-4"><div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">{(beforeMedia?.publicPath || beforeMedia?.privatePath)?<img src={beforeMedia.publicPath || beforeMedia.privatePath} alt="Before report" className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"/>:<div className="flex h-40 items-center justify-center"><Camera size={36}/></div>}<p className="border-t-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Before · Citizen photo</p></div>{(issue.proofState==='submitted'||afterMedia)&&<div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">{(afterMedia?.publicPath || afterMedia?.privatePath)?<img src={afterMedia.publicPath || afterMedia.privatePath} alt="After fix" className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"/>:<div className="flex h-40 items-center justify-center"><FileCheck2 size={36}/></div>}<p className="border-t-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-widest">After · Claimed</p></div>}</div></section></div>
-    <div className="space-y-7"><section><p className="eyebrow mb-3">Verification</p><Panel className="border-4 border-[#B8892D] bg-[#B8892D]/10"><p className="display-title text-sm">{issue.status==='Claimed Resolved'?'This issue was claimed resolved. Is it fixed?':'Community verification'}</p><div className="mt-3 flex flex-wrap gap-3 text-xs font-bold"><span>✓ {votes.fixed ?? 0} fixed</span><span>✕ {votes.notFixed ?? 0} not fixed</span><span>? {votes.unsure ?? 0} unsure</span></div>{issue.status==='Claimed Resolved'&&<a href={`/citizen/issue/${issue.id}/verify`} className="mt-4 inline-block"><Button variant="gold">Verify now →</Button></a>}<p className="mt-3 text-[10px] text-[#2A3320]/65">2 nearby “not fixed” votes will reopen the issue.</p></Panel></section><section><p className="eyebrow mb-3">Activity timeline</p><Panel className="border-4"><ActivityTimeline events={events}/></Panel></section><div className="flex flex-wrap gap-3"><Button onClick={()=>{setSupported(true);toast.success('Thanks for supporting this issue.');}} variant={supported?'sand':'olive'}><ThumbsUp size={15}/>{supported?'Supported':'Support issue'}</Button><Button variant="ghost" onClick={()=>toast.info('Abuse report saved to the demo moderation queue.')}>⚑ Report abuse</Button></div></div></div><DemoNote>Demo data · Synthetic records</DemoNote></div>;
+  return (
+    <div>
+      <a
+        href="/citizen/my-reports"
+        className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] hover:underline"
+      >
+        <ArrowLeft size={14} />
+        Back to my reports
+      </a>
+      <div className="mb-5 border-b-4 border-[#2A3320] pb-5">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#4F5B2A]">
+            <CategoryIcon category={issue.category} />
+            {issue.category}
+          </span>
+          <StatusBadge status={issue.status} />
+        </div>
+        <h1 className="display-title max-w-4xl text-2xl md:text-4xl">
+          {issue.title}
+        </h1>
+        <p className="mt-3 text-xs font-medium text-[#2A3320]/60">
+          Issue {issue.publicRef || issue.id} · Registered{" "}
+          {issue.age || "Recently"} · Updated{" "}
+          {issue.updatedAge || issue.age || "Recently"} ·{" "}
+          {issue.wardId || issue.ward || "Ward 12"}{" "}
+          <span className="mx-1">·</span>
+          {supportersCount} supporters
+        </p>
+      </div>
+      <div className="grid gap-7 lg:grid-cols-[1.15fr_.85fr]">
+        <div className="space-y-7">
+          <section>
+            <p className="eyebrow mb-3">Approximate location</p>
+            <MapView issues={[issue]} selectedId={issue.id} height="250px" />
+            <p className="mt-3 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/55">
+              ⌖ Public pins are coarsened
+            </p>
+          </section>
+          <section>
+            <p className="eyebrow mb-3">Description</p>
+            <Panel className="border-4">
+              <p className="text-sm leading-relaxed">
+                {issue.description || "No description provided."}
+              </p>
+            </Panel>
+          </section>
+          <section>
+            <p className="eyebrow mb-3">Report media</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">
+                {beforeMedia?.publicPath || beforeMedia?.privatePath ? (
+                  <img
+                    src={beforeMedia.publicPath || beforeMedia.privatePath}
+                    alt="Before report"
+                    className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"
+                  />
+                ) : (
+                  <div className="flex h-40 items-center justify-center">
+                    <Camera size={36} />
+                  </div>
+                )}
+                <p className="border-t-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-widest">
+                  Before · Citizen photo
+                </p>
+              </div>
+              {(issue.proofState === "submitted" || afterMedia) && (
+                <div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">
+                  {afterMedia?.publicPath || afterMedia?.privatePath ? (
+                    <img
+                      src={afterMedia.publicPath || afterMedia.privatePath}
+                      alt="After fix"
+                      className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"
+                    />
+                  ) : (
+                    <div className="flex h-40 items-center justify-center">
+                      <FileCheck2 size={36} />
+                    </div>
+                  )}
+                  <p className="border-t-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-widest">
+                    After · Claimed
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+        <div className="space-y-7">
+          <section>
+            <p className="eyebrow mb-3">Verification</p>
+            <Panel className="border-4 border-[#B8892D] bg-[#B8892D]/10">
+              <p className="display-title text-sm">
+                {issue.status === "Claimed Resolved"
+                  ? "This issue was claimed resolved. Is it fixed?"
+                  : "Community verification"}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold">
+                <span>✓ {votes.fixed ?? 0} fixed</span>
+                <span>✕ {votes.notFixed ?? 0} not fixed</span>
+                <span>? {votes.unsure ?? 0} unsure</span>
+              </div>
+              {issue.status === "Claimed Resolved" && (
+                <a
+                  href={`/citizen/issue/${issue.id}/verify`}
+                  className="mt-4 inline-block"
+                >
+                  <Button variant="gold">Verify now →</Button>
+                </a>
+              )}
+              <p className="mt-3 text-[10px] text-[#2A3320]/65">
+                2 nearby “not fixed” votes will reopen the issue.
+              </p>
+            </Panel>
+          </section>
+          <section>
+            <p className="eyebrow mb-3">Activity timeline</p>
+            <Panel className="border-4">
+              <ActivityTimeline events={events} />
+            </Panel>
+          </section>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => {
+                setSupported(true);
+                toast.success("Thanks for supporting this issue.");
+              }}
+              variant={supported ? "sand" : "olive"}
+            >
+              <ThumbsUp size={15} />
+              {supported ? "Supported" : "Support issue"}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() =>
+                toast.info("Abuse report saved to the demo moderation queue.")
+              }
+            >
+              ⚑ Report abuse
+            </Button>
+          </div>
+        </div>
+      </div>
+      <DemoNote>Demo data · Synthetic records</DemoNote>
+    </div>
+  );
 }
 
-export function VerificationVote(){
-  const {id='ND-109'}=useParams(); const issue=seedIssues.find(item=>item.id===id)||seedIssues[5]; const [vote,setVote]=useState<string|null>(null);const [submitting,setSubmitting]=useState(false);const [summary,setSummary]=useState<{fixed:number;notFixed:number;unsure:number;total:number}|null>(null);
-  const choices=[['fixed','\u2713','Yes, fixed','bg-[#4F5B2A] text-white'],['not_fixed','x','Not fixed','bg-[#B8892D] text-white'],['unsure','?','Unsure','bg-[#FDFBF7] text-[#2A3320]']] as const;
-  const handleVote=async(key:'fixed'|'not_fixed'|'unsure')=>{if(submitting||vote)return;setVote(key);setSubmitting(true);try{const result=await issuesApi.verify(id,key);setSummary(result.summary as {fixed:number;notFixed:number;unsure:number;total:number});toast.success('Vote recorded and linked to the audit chain.');}catch(e:any){toast.error(e.message||'Vote could not be recorded');setVote(null);}finally{setSubmitting(false);}};
-  return <div className="mx-auto max-w-4xl"><a href={`/citizen/issue/${issue.id}`} className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase text-[#4F5B2A] hover:underline"><ArrowLeft size={14}/>Back to issue</a><PageHeader eyebrow={`Verification · ${issue.id}`} title="Verify this fix" description={issue.title}/><div className="grid gap-4 sm:grid-cols-2">{['Before · Citizen report','After · Officer evidence'].map((label,index)=><Panel key={label} className="border-4 !p-0"><div className="flex h-52 items-center justify-center bg-[#D8C9A8]/50">{index?<FileCheck2 size={45}/>:<Camera size={45}/>}</div><p className="border-t-4 border-[#2A3320] bg-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white">{label}</p></Panel>)}</div><Panel className="mt-5 border-4 bg-[#D8C9A8]/30"><p className="eyebrow">Officer resolution note</p><p className="mt-2 text-sm leading-relaxed">The reported civic issue has been attended to. Please verify whether the public impact has been resolved.</p></Panel><section className="mt-7"><h2 className="display-title text-center text-xl">Based on the evidence, is this issue fixed?</h2><div className="mt-5 grid gap-3 sm:grid-cols-3">{choices.map(([key,icon,label,style])=><button key={key} disabled={submitting||!!vote} onClick={()=>handleVote(key)} className={`flex min-h-36 flex-col items-center justify-center border-4 border-[#2A3320] p-5 shadow-[6px_6px_0px_0px_#2A3320] transition-transform hover:-translate-y-1 disabled:opacity-60 disabled:cursor-not-allowed ${style} ${vote===key?'outline outline-4 outline-[#B8892D]':''}`}><span className="display-title text-3xl">{icon}</span><span className="mt-3 text-[10px] font-black uppercase tracking-widest">{label}</span></button>)}</div><p className="mt-5 text-center text-xs leading-relaxed text-[#2A3320]/65">If 2 or more nearby citizens vote "not fixed", the issue will be automatically reopened. One vote per person per proof submission.</p></section>
-    {summary&&<Panel className="mt-5 border-4 border-[#4F5B2A] bg-[#4F5B2A]/10"><p className="eyebrow">Live vote tally</p><div className="mt-3 grid grid-cols-3 text-center"><div><p className="display-title text-2xl">{summary.fixed}</p><p className="mt-1 text-[9px] font-black uppercase tracking-widest">Fixed</p></div><div><p className="display-title text-2xl">{summary.notFixed}</p><p className="mt-1 text-[9px] font-black uppercase tracking-widest">Not fixed</p></div><div><p className="display-title text-2xl">{summary.unsure}</p><p className="mt-1 text-[9px] font-black uppercase tracking-widest">Unsure</p></div></div><p className="mt-3 text-center text-[10px] text-[#2A3320]/60">{summary.total} total votes · 2 "not fixed" triggers auto-reopen</p></Panel>}
-    <DemoNote/></div>;
+export function VerificationVote() {
+  const { id = "ND-109" } = useParams();
+  const issue = seedIssues.find(item => item.id === id) || seedIssues[5];
+  const [vote, setVote] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [summary, setSummary] = useState<{
+    fixed: number;
+    notFixed: number;
+    unsure: number;
+    total: number;
+  } | null>(null);
+  const choices = [
+    ["fixed", "\u2713", "Yes, fixed", "bg-[#4F5B2A] text-white"],
+    ["not_fixed", "x", "Not fixed", "bg-[#B8892D] text-white"],
+    ["unsure", "?", "Unsure", "bg-[#FDFBF7] text-[#2A3320]"],
+  ] as const;
+  const handleVote = async (key: "fixed" | "not_fixed" | "unsure") => {
+    if (submitting || vote) return;
+    setVote(key);
+    setSubmitting(true);
+    try {
+      const result = await issuesApi.verify(id, key);
+      setSummary(
+        result.summary as {
+          fixed: number;
+          notFixed: number;
+          unsure: number;
+          total: number;
+        }
+      );
+      toast.success("Vote recorded and linked to the audit chain.");
+    } catch (e: any) {
+      toast.error(e.message || "Vote could not be recorded");
+      setVote(null);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+  return (
+    <div className="mx-auto max-w-4xl">
+      <a
+        href={`/citizen/issue/${issue.id}`}
+        className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase text-[#4F5B2A] hover:underline"
+      >
+        <ArrowLeft size={14} />
+        Back to issue
+      </a>
+      <PageHeader
+        eyebrow={`Verification · ${issue.id}`}
+        title="Verify this fix"
+        description={issue.title}
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        {["Before · Citizen report", "After · Officer evidence"].map(
+          (label, index) => (
+            <Panel key={label} className="border-4 !p-0">
+              <div className="flex h-52 items-center justify-center bg-[#D8C9A8]/50">
+                {index ? <FileCheck2 size={45} /> : <Camera size={45} />}
+              </div>
+              <p className="border-t-4 border-[#2A3320] bg-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white">
+                {label}
+              </p>
+            </Panel>
+          )
+        )}
+      </div>
+      <Panel className="mt-5 border-4 bg-[#D8C9A8]/30">
+        <p className="eyebrow">Officer resolution note</p>
+        <p className="mt-2 text-sm leading-relaxed">
+          The reported civic issue has been attended to. Please verify whether
+          the public impact has been resolved.
+        </p>
+      </Panel>
+      <section className="mt-7">
+        <h2 className="display-title text-center text-xl">
+          Based on the evidence, is this issue fixed?
+        </h2>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          {choices.map(([key, icon, label, style]) => (
+            <button
+              key={key}
+              disabled={submitting || !!vote}
+              onClick={() => handleVote(key)}
+              className={`flex min-h-36 flex-col items-center justify-center border-4 border-[#2A3320] p-5 shadow-[6px_6px_0px_0px_#2A3320] transition-transform hover:-translate-y-1 disabled:opacity-60 disabled:cursor-not-allowed ${style} ${vote === key ? "outline outline-4 outline-[#B8892D]" : ""}`}
+            >
+              <span className="display-title text-3xl">{icon}</span>
+              <span className="mt-3 text-[10px] font-black uppercase tracking-widest">
+                {label}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-5 text-center text-xs leading-relaxed text-[#2A3320]/65">
+          If 2 or more nearby citizens vote "not fixed", the issue will be
+          automatically reopened. One vote per person per proof submission.
+        </p>
+      </section>
+      {summary && (
+        <Panel className="mt-5 border-4 border-[#4F5B2A] bg-[#4F5B2A]/10">
+          <p className="eyebrow">Live vote tally</p>
+          <div className="mt-3 grid grid-cols-3 text-center">
+            <div>
+              <p className="display-title text-2xl">{summary.fixed}</p>
+              <p className="mt-1 text-[9px] font-black uppercase tracking-widest">
+                Fixed
+              </p>
+            </div>
+            <div>
+              <p className="display-title text-2xl">{summary.notFixed}</p>
+              <p className="mt-1 text-[9px] font-black uppercase tracking-widest">
+                Not fixed
+              </p>
+            </div>
+            <div>
+              <p className="display-title text-2xl">{summary.unsure}</p>
+              <p className="mt-1 text-[9px] font-black uppercase tracking-widest">
+                Unsure
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-center text-[10px] text-[#2A3320]/60">
+            {summary.total} total votes · 2 "not fixed" triggers auto-reopen
+          </p>
+        </Panel>
+      )}
+      <DemoNote />
+    </div>
+  );
 }
 
-export function Notifications(){
-  const [filter,setFilter]=useState('All'); const [read,setRead]=useState<number[]>([]); const items=demoNotifications.filter(item=>filter==='All'||item.kind===filter.toLowerCase().replace(' updates',''));
-  return <div><PageHeader eyebrow="Citizen space" title="Notifications" description="Stay on top of status changes, verification requests, and local activity."/><div className="mb-4 flex flex-wrap gap-2">{['All','Status Updates','Verification','Community'].map(label=><button key={label} onClick={()=>setFilter(label)} className={`border-2 border-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-wider ${filter===label?'bg-[#4F5B2A] text-white':'bg-[#FDFBF7]'}`}>{label}</button>)}</div><div className="border-4 border-[#2A3320] bg-[#FDFBF7]">{items.map(item=>{const idx=demoNotifications.indexOf(item);const unread=item.unread&&!read.includes(idx);return <div key={item.title} onClick={()=>setRead(old=>old.includes(idx)?old:[...old,idx])} className={`border-b-2 border-[#E8E0D0] px-5 py-5 last:border-0 ${unread?'bg-[#D8C9A8]/10':''}`}><div className="flex gap-4"><span className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-[#2A3320] ${unread?'bg-[#4F5B2A]':'bg-white'}`}/><div className="flex-1"><p className="font-black">{item.title}</p><p className="mt-1 text-sm leading-relaxed text-[#2A3320]/70">{item.body}</p><p className="mt-2 text-[9px] font-bold uppercase tracking-widest text-[#2A3320]/45">{item.time}</p>{item.kind==='verification'&&<a href={`/citizen/issue/${item.issueId}/verify`} className="mt-3 inline-block text-[9px] font-black uppercase tracking-wider text-[#4F5B2A] underline">Verify now →</a>}</div></div></div>})}</div><DemoNote/></div>;
+export function Notifications() {
+  const [filter, setFilter] = useState("All");
+  const [read, setRead] = useState<number[]>([]);
+  const [items, setItems] = useState<Array<{ id: string; issueId: string; title: string; body: string; kind: string; time: string; unread: boolean }>>([]);
+  useEffect(() => { void notificationsApi.list().then(setItems).catch(() => setItems([])); }, []);
+  const filteredItems = items.filter(
+    item =>
+      filter === "All" ||
+      item.kind === filter.toLowerCase().replace(" updates", "")
+  );
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Citizen space"
+        title="Notifications"
+        description="Stay on top of status changes, verification requests, and local activity."
+      />
+      <div className="mb-4 flex flex-wrap gap-2">
+        {["All", "Status Updates", "Verification", "Community"].map(label => (
+          <button
+            key={label}
+            onClick={() => setFilter(label)}
+            className={`border-2 border-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-wider ${filter === label ? "bg-[#4F5B2A] text-white" : "bg-[#FDFBF7]"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="border-4 border-[#2A3320] bg-[#FDFBF7]">
+        {filteredItems.map((item, index) => {
+          const idx = index;
+          const unread = item.unread && !read.includes(idx);
+          return (
+            <div
+              key={item.title}
+              onClick={() =>
+                setRead(old => (old.includes(idx) ? old : [...old, idx]))
+              }
+              className={`border-b-2 border-[#E8E0D0] px-5 py-5 last:border-0 ${unread ? "bg-[#D8C9A8]/10" : ""}`}
+            >
+              <div className="flex gap-4">
+                <span
+                  className={`mt-1 h-3 w-3 shrink-0 rounded-full border-2 border-[#2A3320] ${unread ? "bg-[#4F5B2A]" : "bg-white"}`}
+                />
+                <div className="flex-1">
+                  <p className="font-black">{item.title}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-[#2A3320]/70">
+                    {item.body}
+                  </p>
+                  <p className="mt-2 text-[9px] font-bold uppercase tracking-widest text-[#2A3320]/45">
+                    {item.time}
+                  </p>
+                  {item.kind === "verification" && (
+                    <a
+                      href={`/citizen/issue/${item.issueId}/verify`}
+                      className="mt-3 inline-block text-[9px] font-black uppercase tracking-wider text-[#4F5B2A] underline"
+                    >
+                      Verify now →
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <DemoNote />
+    </div>
+  );
 }
 
-export function Settings(){
-  const [language,setLanguage]=useState('English'); const [toggles,setToggles]=useState({status:true,verification:true,community:false});
-  const privacy=[['Identity is private','Your name and contact details are never published on the public map.'],['Approximate locations','Public pins are coarsened to protect your exact address.'],['Original photos stay private','Only a redacted derivative may be used for public issue context.']];
-  return <div><PageHeader eyebrow="Citizen space" title="Settings" description="Adjust your experience and review how NagarDrishti protects your information."/><div className="space-y-4"><Panel className="border-4"><p className="eyebrow">Language</p><div className="mt-4 flex flex-wrap gap-3">{['English','हिन्दी','मराठी'].map(value=><button key={value} onClick={()=>setLanguage(value)} className={`min-w-28 border-4 border-[#2A3320] px-4 py-4 text-sm font-black shadow-[4px_4px_0px_0px_#2A3320] ${language===value?'bg-[#4F5B2A] text-white':'bg-[#FDFBF7]'}`}>{value}{language===value&&<Check size={14} className="ml-2 inline"/>}</button>)}</div></Panel>
-      <Panel className="border-4"><p className="eyebrow">Notifications</p><div className="mt-3">{([['status','Status updates'],['verification','Verification prompts'],['community','Community activity']] as const).map(([key,label])=><div key={key} className="flex items-center justify-between border-b-2 border-[#E8E0D0] py-4 last:border-0"><span className="text-sm font-bold">{label}</span><button aria-pressed={toggles[key]} onClick={()=>setToggles(old=>({...old,[key]:!old[key]}))} className={`flex h-7 w-12 items-center border-2 border-[#2A3320] p-1 ${toggles[key]?'justify-end bg-[#4F5B2A]':'justify-start bg-[#E8E0D0]'}`}><span className="h-4 w-4 border-2 border-[#2A3320] bg-white"/></button></div>)}</div></Panel>
-      <Panel className="border-4"><p className="eyebrow">Privacy</p><div className="mt-4 grid gap-3 md:grid-cols-3">{privacy.map(([title,desc])=><div key={title} className="border-2 border-[#2A3320] bg-[#D8C9A8]/20 p-4"><ShieldCheck size={18}/><p className="mt-3 text-xs font-black uppercase tracking-wider">{title}</p><p className="mt-2 text-xs leading-relaxed text-[#2A3320]/65">{desc}</p></div>)}</div></Panel>
-      <Panel className="border-4"><p className="eyebrow">About</p><p className="mt-2 text-sm font-bold">NagarDrishti v0.1 · CivicLens Research Project</p><p className="mt-1 text-xs text-[#2A3320]/65">A privacy-preserving civic issue platform.</p><div className="mt-4 flex flex-wrap gap-3"><a href="/research"><Button variant="outline">View documentation →</Button></a><a href="/"><Button variant="ghost">← Back to home</Button></a></div></Panel></div><DemoNote/></div>;
+export function Settings() {
+  const [language, setLanguage] = useState("English");
+  const [toggles, setToggles] = useState({
+    status: true,
+    verification: true,
+    community: false,
+  });
+  const privacy = [
+    [
+      "Identity is private",
+      "Your name and contact details are never published on the public map.",
+    ],
+    [
+      "Approximate locations",
+      "Public pins are coarsened to protect your exact address.",
+    ],
+    [
+      "Original photos stay private",
+      "Only a redacted derivative may be used for public issue context.",
+    ],
+  ];
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Citizen space"
+        title="Settings"
+        description="Adjust your experience and review how NagarDrishti protects your information."
+      />
+      <div className="space-y-4">
+        <Panel className="border-4">
+          <p className="eyebrow">Language</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {["English", "हिन्दी", "मराठी"].map(value => (
+              <button
+                key={value}
+                onClick={() => setLanguage(value)}
+                className={`min-w-28 border-4 border-[#2A3320] px-4 py-4 text-sm font-black shadow-[4px_4px_0px_0px_#2A3320] ${language === value ? "bg-[#4F5B2A] text-white" : "bg-[#FDFBF7]"}`}
+              >
+                {value}
+                {language === value && (
+                  <Check size={14} className="ml-2 inline" />
+                )}
+              </button>
+            ))}
+          </div>
+        </Panel>
+        <Panel className="border-4">
+          <p className="eyebrow">Notifications</p>
+          <div className="mt-3">
+            {(
+              [
+                ["status", "Status updates"],
+                ["verification", "Verification prompts"],
+                ["community", "Community activity"],
+              ] as const
+            ).map(([key, label]) => (
+              <div
+                key={key}
+                className="flex items-center justify-between border-b-2 border-[#E8E0D0] py-4 last:border-0"
+              >
+                <span className="text-sm font-bold">{label}</span>
+                <button
+                  aria-pressed={toggles[key]}
+                  onClick={() =>
+                    setToggles(old => ({ ...old, [key]: !old[key] }))
+                  }
+                  className={`flex h-7 w-12 items-center border-2 border-[#2A3320] p-1 ${toggles[key] ? "justify-end bg-[#4F5B2A]" : "justify-start bg-[#E8E0D0]"}`}
+                >
+                  <span className="h-4 w-4 border-2 border-[#2A3320] bg-white" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Panel>
+        <Panel className="border-4">
+          <p className="eyebrow">Privacy</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {privacy.map(([title, desc]) => (
+              <div
+                key={title}
+                className="border-2 border-[#2A3320] bg-[#D8C9A8]/20 p-4"
+              >
+                <ShieldCheck size={18} />
+                <p className="mt-3 text-xs font-black uppercase tracking-wider">
+                  {title}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-[#2A3320]/65">
+                  {desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+        <Panel className="border-4">
+          <p className="eyebrow">About</p>
+          <p className="mt-2 text-sm font-bold">
+            NagarDrishti v0.1 · CivicLens Research Project
+          </p>
+          <p className="mt-1 text-xs text-[#2A3320]/65">
+            A privacy-preserving civic issue platform.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a href="/research">
+              <Button variant="outline">View documentation →</Button>
+            </a>
+            <a href="/">
+              <Button variant="ghost">← Back to home</Button>
+            </a>
+          </div>
+        </Panel>
+      </div>
+      <DemoNote />
+    </div>
+  );
 }

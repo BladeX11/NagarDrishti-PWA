@@ -133,14 +133,17 @@ export function useLiveIssues() {
 
   useEffect(() => {
     let mounted = true;
-    fetchLiveIssues().then((items) => {
+    const refresh=()=>fetchLiveIssues().then((items) => {
       if (!mounted) return;
       setIssues(items);
       setIsLive(true);
     }).catch(() => {
       if (mounted) setIsLive(false);
     });
-    return () => { mounted = false; };
+    void refresh();
+    const timer=window.setInterval(refresh,15000);
+    window.addEventListener('online',refresh);
+    return () => { mounted = false; window.clearInterval(timer); window.removeEventListener('online',refresh); };
   }, []);
 
   return { issues, isLive };

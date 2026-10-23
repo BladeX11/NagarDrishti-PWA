@@ -7,6 +7,7 @@ import researchRoutes from './research.js';
 import aiRoutes from './ai.js';
 import auditRoutes from './audit.js';
 import officerRoutes from './officer.js';
+import notificationRoutes from './notifications.js';
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use('/research', researchRoutes);
 router.use('/ai', aiRoutes);
 router.use('/audit', auditRoutes);
 router.use('/officer', officerRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;

@@ -1,6 +1,8 @@
 import { Bell, Camera, Compass, Home, ListChecks, Plus, Settings, ChevronRight } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useState } from 'react';
+import { InstallPrompt } from '../components/shared/InstallPrompt';
+import { PushOptIn } from '../components/shared/PushOptIn';
 
 const links = [
   { to: '/citizen',              label: 'Home',        icon: Home,       end: true  },
@@ -57,6 +59,7 @@ export function CitizenLayout() {
             <Link aria-label="Notifications" to="/citizen/notifications" className="border-2 border-[#2A3320] bg-[#FDFBF7] p-2.5 hover:bg-[#E8E0D0]"><Bell size={17}/></Link>
             <Link aria-label="Settings" to="/citizen/settings" className="border-2 border-[#2A3320] bg-[#FDFBF7] p-2.5 hover:bg-[#E8E0D0]"><Settings size={17}/></Link>
             <Link to="/transparency" className="hidden border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[9px] font-black uppercase tracking-wider sm:block">Public view</Link>
+            <PushOptIn />
           </div>
         </header>
 
@@ -122,6 +125,7 @@ export function CitizenLayout() {
           </div>
         )}
       </div>
+      <InstallPrompt />
     </div>
   );
 }

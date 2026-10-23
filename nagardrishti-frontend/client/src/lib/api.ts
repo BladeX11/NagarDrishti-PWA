@@ -1,36 +1,44 @@
 /**
  * Centralized API client for NagarDrishti frontend.
  * All API calls go through this module — never fetch directly from page components.
- * Auth: uses x-demo-role header for mock auth. Role is stored in localStorage.
+ * Auth: uses an httpOnly session cookie when available, with the demo role
+ * header retained for local prototype role switching.
  */
 
-const BASE = '/api';
+const BASE = "/api";
 
 function getRole(): string | null {
-  return localStorage.getItem('nd-role');
+  return localStorage.getItem("nd-role");
 }
 
 export function setRole(role: string) {
-  localStorage.setItem('nd-role', role);
+  localStorage.setItem("nd-role", role);
 }
 
 export function clearRole() {
-  localStorage.removeItem('nd-role');
+  localStorage.removeItem("nd-role");
 }
 
-async function request<T>(
-  path: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const role = getRole();
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
-  if (role) headers['x-demo-role'] = role;
+  if (role) headers["x-demo-role"] = role;
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
-  const json = await res.json();
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
+  const text = await res.text();
+  let json: { success?: boolean; data?: T; error?: string };
+  try {
+    json = JSON.parse(text) as typeof json;
+  } catch {
+    throw new Error(`Server returned an invalid response (HTTP ${res.status})`);
+  }
   if (!json.success) {
     throw new Error(json.error ?? `API error ${res.status}`);
   }
@@ -40,19 +48,75 @@ async function request<T>(
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 export const authApi = {
+  requestOtp(destination: string, channel: "email" | "sms" = "email") {
+    return request<{ expiresInSeconds: number }>("/auth/request-otp", {
+      method: "POST",
+      body: JSON.stringify({ destination, channel }),
+    });
+  },
+  verifyOtp(
+    destination: string,
+    code: string,
+    channel: "email" | "sms" = "email",
+    role = "citizen",
+    displayName?: string
+  ) {
+    return request<{ id: string; role: string; name: string }>(
+      "/auth/verify-otp",
+      {
+        method: "POST",
+        body: JSON.stringify({ destination, code, channel, role, displayName }),
+      }
+    );
+  },
   login(role: string) {
     setRole(role);
-    return request<{ id: string; role: string; name: string }>('/auth/login', {
-      method: 'POST',
+    return request<{ id: string; role: string; name: string }>("/auth/login", {
+      method: "POST",
       body: JSON.stringify({ role }),
     });
   },
   me() {
-    return request<{ id: string; role: string; name: string } | null>('/auth/me');
+    return request<{ id: string; role: string; name: string } | null>(
+      "/auth/me"
+    );
   },
   logout() {
     clearRole();
-    return request('/auth/logout', { method: 'POST' });
+    return request("/auth/logout", { method: "POST" });
+  },
+};
+
+export const notificationsApi = {
+  list() {
+    return request<
+      Array<{
+        id: string;
+        issueId: string;
+        title: string;
+        body: string;
+        kind: string;
+        time: string;
+        unread: boolean;
+      }>
+    >("/notifications");
+  },
+  vapidKey() {
+    return request<{ enabled: boolean; publicKey: string | null }>(
+      "/notifications/vapid-public-key"
+    );
+  },
+  subscribe(subscription: PushSubscriptionJSON) {
+    return request<{ subscribed: boolean }>("/notifications/subscribe", {
+      method: "POST",
+      body: JSON.stringify(subscription),
+    });
+  },
+  unsubscribe(endpoint: string) {
+    return request<{ subscribed: boolean }>("/notifications/subscribe", {
+      method: "DELETE",
+      body: JSON.stringify({ endpoint }),
+    });
   },
 };
 
@@ -81,6 +145,8 @@ export interface ApiIssue {
   age: string;
   ageInDays: number;
   reporterId?: string;
+  events?: Array<{ id: string; fromStatus?: string; toStatus: string; actorRole: string; reason?: string; createdAt: string }>;
+  media?: Array<{ id: string; type: string; privatePath?: string; publicPath?: string; mimeType?: string }>;
 }
 
 export interface ApiIssueList {
@@ -111,64 +177,85 @@ export const issuesApi = {
     limit?: number;
   }) {
     const qs = new URLSearchParams();
-    if (params?.status) qs.set('status', params.status);
-    if (params?.category) qs.set('category', params.category);
-    if (params?.wardId) qs.set('wardId', params.wardId);
-    if (params?.departmentId) qs.set('departmentId', params.departmentId);
-    if (params?.page) qs.set('page', String(params.page));
-    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.status) qs.set("status", params.status);
+    if (params?.category) qs.set("category", params.category);
+    if (params?.wardId) qs.set("wardId", params.wardId);
+    if (params?.departmentId) qs.set("departmentId", params.departmentId);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
     return request<ApiIssueList>(`/issues?${qs}`);
+  },
+  listMine(params?: { status?: string; page?: number; limit?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    return request<ApiIssueList>(`/issues/mine?${qs}`);
   },
   get(idOrRef: string) {
     return request<ApiIssue>(`/issues/${idOrRef}`);
   },
   create(data: CreateIssuePayload) {
-    return request<ApiIssue>('/issues', {
-      method: 'POST',
+    return request<ApiIssue>("/issues", {
+      method: "POST",
       body: JSON.stringify(data),
     });
   },
-  update(id: string, data: Partial<{ category: string; departmentId: string; priority: number }>) {
+  update(
+    id: string,
+    data: Partial<{ category: string; departmentId: string; priority: number }>
+  ) {
     return request<ApiIssue>(`/issues/${id}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(data),
     });
   },
   support(id: string) {
-    return request<ApiIssue>(`/issues/${id}/support`, { method: 'POST' });
+    return request<ApiIssue>(`/issues/${id}/support`, { method: "POST" });
   },
   updateStatus(id: string, toStatus: string, reason?: string) {
     return request<ApiIssue>(`/issues/${id}/status`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ toStatus, reason }),
     });
   },
   assign(id: string) {
-    return request<ApiIssue>(`/issues/${id}/assign`, { method: 'POST' });
+    return request<ApiIssue>(`/issues/${id}/assign`, { method: "POST" });
   },
   submitProof(id: string, note?: string) {
     return request<ApiIssue>(`/issues/${id}/proof`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ note }),
     });
   },
-  verify(id: string, vote: 'fixed' | 'not_fixed' | 'unsure', proofVersion = 1) {
-    return request<{ vote: unknown; summary: unknown }>(`/issues/${id}/verify`, {
-      method: 'POST',
-      body: JSON.stringify({ vote, proofVersion }),
+  reviewProof(id: string, decision: "accepted" | "rejected") {
+    return request<ApiIssue>(`/issues/${id}/proof/review`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
     });
   },
+  verify(id: string, vote: "fixed" | "not_fixed" | "unsure", proofVersion = 1) {
+    return request<{ vote: unknown; summary: unknown }>(
+      `/issues/${id}/verify`,
+      {
+        method: "POST",
+        body: JSON.stringify({ vote, proofVersion }),
+      }
+    );
+  },
   getTimeline(id: string) {
-    return request<Array<{
-      id: string;
-      fromStatus?: string;
-      toStatus: string;
-      actorRole: string;
-      reason?: string;
-      eventHash: string;
-      prevHash: string;
-      createdAt: string;
-    }>>(`/issues/${id}/timeline`);
+    return request<
+      Array<{
+        id: string;
+        fromStatus?: string;
+        toStatus: string;
+        actorRole: string;
+        reason?: string;
+        eventHash: string;
+        prevHash: string;
+        createdAt: string;
+      }>
+    >(`/issues/${id}/timeline`);
   },
 };
 
@@ -190,15 +277,27 @@ export interface MapMarker {
   wardId?: string | null;
 }
 
-export const TIER_LABELS = ['Normal', 'Highlighted', 'Escalated', 'Amplified', 'Critical'] as const;
-export const TIER_COLORS = ['#4F5B2A', '#B8892D', '#C0621A', '#B22222', '#8B0000'] as const;
+export const TIER_LABELS = [
+  "Normal",
+  "Highlighted",
+  "Escalated",
+  "Amplified",
+  "Critical",
+] as const;
+export const TIER_COLORS = [
+  "#4F5B2A",
+  "#B8892D",
+  "#C0621A",
+  "#B22222",
+  "#8B0000",
+] as const;
 
 export const mapApi = {
   getMarkers(params?: { status?: string; category?: string; wardId?: string }) {
     const qs = new URLSearchParams();
-    if (params?.status) qs.set('status', params.status);
-    if (params?.category) qs.set('category', params.category);
-    if (params?.wardId) qs.set('wardId', params.wardId);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.category) qs.set("category", params.category);
+    if (params?.wardId) qs.set("wardId", params.wardId);
     return request<MapMarker[]>(`/map?${qs}`);
   },
 };
@@ -216,18 +315,20 @@ export interface ScorecardData {
 export const transparencyApi = {
   getScorecard(params?: { wardId?: string; departmentId?: string }) {
     const qs = new URLSearchParams();
-    if (params?.wardId) qs.set('wardId', params.wardId);
-    if (params?.departmentId) qs.set('departmentId', params.departmentId);
+    if (params?.wardId) qs.set("wardId", params.wardId);
+    if (params?.departmentId) qs.set("departmentId", params.departmentId);
     return request<ScorecardData>(`/transparency/scorecards?${qs}`);
   },
   getSLABreaches() {
-    return request<ApiIssue[]>('/transparency/sla-breaches');
+    return request<ApiIssue[]>("/transparency/sla-breaches");
   },
   getForgottenIssues() {
-    return request<ApiIssue[]>('/transparency/forgotten');
+    return request<ApiIssue[]>("/transparency/forgotten");
   },
   getNeglectZones() {
-    return request<{ wardIds: string[]; wardNames: Record<string, string> }>('/transparency/neglect-zones');
+    return request<{ wardIds: string[]; wardNames: Record<string, string> }>(
+      "/transparency/neglect-zones"
+    );
   },
 };
 
@@ -261,12 +362,12 @@ export interface DuplicateCandidate {
 export const researchApi = {
   getPredictions(issueId?: string) {
     const qs = new URLSearchParams();
-    if (issueId) qs.set('issueId', issueId);
+    if (issueId) qs.set("issueId", issueId);
     return request<ModelPrediction[]>(`/research/predictions?${qs}`);
   },
   getDuplicates(status?: string) {
     const qs = new URLSearchParams();
-    if (status) qs.set('status', status);
+    if (status) qs.set("status", status);
     return request<DuplicateCandidate[]>(`/research/duplicates?${qs}`);
   },
   getAuditLedger() {
@@ -274,13 +375,17 @@ export const researchApi = {
       valid: boolean;
       totalEvents: number;
       brokenAt?: string;
-    }>('/research/audit-ledger');
+    }>("/research/audit-ledger");
   },
   getMetrics() {
-    return request<{ activeExperiments: number; totalImpact: number; ai: unknown }>('/research/metrics');
+    return request<{
+      activeExperiments: number;
+      totalImpact: number;
+      ai: unknown;
+    }>("/research/metrics");
   },
   getAIMetadata() {
-    return request<unknown>('/research/ai/metadata');
+    return request<unknown>("/research/ai/metadata");
   },
 };
 
@@ -289,8 +394,8 @@ export const researchApi = {
 export interface AdversarialFlag {
   id: string;
   issueId: string;
-  rule: 'PHOTO_REUSE' | 'TEMPORAL' | 'GPS_MISMATCH' | 'BULK_CLOSURE';
-  severity: 'low' | 'medium' | 'high';
+  rule: "PHOTO_REUSE" | "TEMPORAL" | "GPS_MISMATCH" | "BULK_CLOSURE";
+  severity: "low" | "medium" | "high";
   details: Record<string, unknown>;
   resolvedAt: string | null;
   modelVersion: string;
@@ -303,7 +408,7 @@ export const adversarialApi = {
   },
   resolveFlag(flagId: string, resolution: string) {
     return request(`/officer/flags/${flagId}/resolve`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify({ resolution }),
     });
   },
@@ -329,7 +434,6 @@ export const auditApi = {
     return request<ChainVerificationResult>(`/audit/verify/${issueId}`);
   },
   verifyGlobal() {
-    return request<ChainVerificationResult>('/audit/verify');
+    return request<ChainVerificationResult>("/audit/verify");
   },
 };
-

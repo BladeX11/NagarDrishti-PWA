@@ -2,6 +2,7 @@
   "name": "NagarDrishti",
   "short_name": "NagarDrishti",
   "description": "Report and track civic issues in your neighbourhood",
+  "id": "/citizen",
   "start_url": "/citizen",
   "scope": "/",
   "display": "standalone",

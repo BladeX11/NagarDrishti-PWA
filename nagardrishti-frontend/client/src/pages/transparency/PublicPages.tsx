@@ -21,8 +21,10 @@ export function PublicMap(){
   const [submittedIssues]=useState(loadSubmittedIssues);
   
   useEffect(()=>{
-    mapApi.getMarkers().then(data=>{setMapIssues(data);setLoaded(true);}).catch(()=>setLoaded(true));
-    transparencyApi.getNeglectZones().then(d=>setNeglectZones(d.wardIds)).catch(()=>{});
+    let active=true;
+    const refresh=()=>{mapApi.getMarkers().then(data=>{if(active){setMapIssues(data);setLoaded(true)}}).catch(()=>{if(active)setLoaded(true)});transparencyApi.getNeglectZones().then(d=>{if(active)setNeglectZones(d.wardIds)}).catch(()=>{})};
+    void refresh();const timer=window.setInterval(refresh,15000);window.addEventListener('online',refresh);
+    return()=>{active=false;window.clearInterval(timer);window.removeEventListener('online',refresh)};
   },[]);
   const allIssues=mapIssues.length>0?mapIssues:[...seedIssues,...submittedIssues]; const filtered=useMemo(()=>(allIssues as any[]).filter(issue=>(filter.ward==='All'||issue.wardId===filter.ward||issue.ward===filter.ward)&&(filter.category==='All'||issue.category===filter.category)&&(filter.status==='All'||issue.status===filter.status)),[filter,allIssues]);
   const metrics=[[''+allIssues.filter((i:any)=>i.status==='Open').length,'Open'],[''+allIssues.filter((i:any)=>i.status==='In Progress'||i.status==='Assigned').length,'In progress'],[''+allIssues.filter((i:any)=>i.status==='Verified Fixed').length,'Resolved'],[''+allIssues.filter((i:any)=>i.status==='Reopened').length,'Reopened']];
