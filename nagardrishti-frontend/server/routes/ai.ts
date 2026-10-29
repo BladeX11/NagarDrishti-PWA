@@ -14,7 +14,7 @@ const RULES = [
 
 const DEFAULT = { category: "other", confidence: 0.55 };
 
-function classify(text) {
+function classify(text: string) {
   const lower = text.toLowerCase();
   let best = DEFAULT;
   for (const rule of RULES) {
@@ -44,8 +44,8 @@ router.post("/classify", (req, res) => {
         modelVersion: "M1-rules-v0.1",
       },
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || 'Classification failed' });
   }
 });
 

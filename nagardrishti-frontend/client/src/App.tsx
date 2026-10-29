@@ -24,6 +24,7 @@ const PublicMap=lazy(()=>import('./pages/transparency/PublicPages').then(m=>({de
 const Scorecards=lazy(()=>import('./pages/transparency/PublicPages').then(m=>({default:m.Scorecards})));
 const SLABreachWall=lazy(()=>import('./pages/transparency/PublicPages').then(m=>({default:m.SLABreachWall})));
 const ForgottenIssues=lazy(()=>import('./pages/transparency/PublicPages').then(m=>({default:m.ForgottenIssues})));
+const EquityDashboard=lazy(()=>import('./pages/transparency/PublicPages').then(m=>({default:m.EquityDashboard})));
 const PublicIssueDetail=lazy(()=>import('./pages/transparency/PublicPages').then(m=>({default:m.PublicIssueDetail})));
 const ResearchOverview=lazy(()=>import('./pages/research/ResearchPages').then(m=>({default:m.ResearchOverview})));
 const ModelPredictions=lazy(()=>import('./pages/research/ResearchPages').then(m=>({default:m.ModelPredictions})));
@@ -51,7 +52,7 @@ export default function App() {
   <Route path="/" element={<ResponsiveHome/>}/>
   <Route path="/citizen" element={<CitizenLayout/>}><Route index element={<CitizenHome/>}/><Route path="explore" element={<ExploreMap/>}/><Route path="report" element={<ReportFlow/>}/><Route path="my-reports" element={<MyReports/>}/><Route path="issue/:id/verify" element={<VerificationVote/>}/><Route path="issue/:id" element={<CitizenIssueDetail/>}/><Route path="notifications" element={<Notifications/>}/><Route path="settings" element={<Settings/>}/></Route>
   <Route path="/officer" element={<OfficerLayout/>}><Route index element={<OfficerOverview/>}/><Route path="queue" element={<TriageQueue/>}/><Route path="issue/:id/proof" element={<ProofReview/>}/><Route path="issue/:id" element={<OfficerIssueDetail/>}/></Route>
-  <Route path="/transparency" element={<PublicLayout/>}><Route index element={<PublicMap/>}/><Route path="scorecards" element={<Scorecards/>}/><Route path="sla-breaches" element={<SLABreachWall/>}/><Route path="forgotten" element={<ForgottenIssues/>}/><Route path="issue/:id" element={<PublicIssueDetail/>}/></Route>
+  <Route path="/transparency" element={<PublicLayout/>}><Route index element={<PublicMap/>}/><Route path="scorecards" element={<Scorecards/>}/><Route path="equity" element={<EquityDashboard/>}/><Route path="sla-breaches" element={<SLABreachWall/>}/><Route path="forgotten" element={<ForgottenIssues/>}/><Route path="issue/:id" element={<PublicIssueDetail/>}/></Route>
   <Route path="/research" element={<ResearchLayout/>}><Route index element={<ResearchOverview/>}/><Route path="models" element={<ModelPredictions/>}/><Route path="duplicates" element={<DuplicateAnalysis/>}/><Route path="proof-audit" element={<ProofAudit/>}/><Route path="metrics" element={<ExperimentMetrics/>}/><Route path="audit-ledger" element={<AuditLedger/>}/></Route>
   <Route path="/dashboard" element={<Navigate to="/citizen" replace/>}/><Route path="*" element={<NotFound/>}/>
 </Routes></Suspense></BrowserRouter>;

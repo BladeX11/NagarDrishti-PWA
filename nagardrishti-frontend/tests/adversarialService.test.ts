@@ -36,21 +36,76 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 }
 
 // ─── DB mock ─────────────────────────────────────────────────────────────────
-vi.mock('../server/db/index.js', () => {
-  const chain: any = {};
-  chain.select = vi.fn().mockReturnValue(chain);
-  chain.from = vi.fn().mockReturnValue(chain);
-  chain.where = vi.fn().mockReturnValue(chain);
-  chain.orderBy = vi.fn().mockReturnValue(chain);
-  chain.limit = vi.fn().mockResolvedValue([]);
-  chain.update = vi.fn().mockReturnValue(chain);
-  chain.set = vi.fn().mockReturnValue(chain);
-  chain.insert = vi.fn().mockReturnValue(chain);
-  chain.values = vi.fn().mockResolvedValue([]);
-  // Terminal .where also needs to support being awaited directly
-  chain.where.mockResolvedValue([]);
-  return { db: chain };
+const { chain, rawWhere, rawOrderBy, rawLimit, rawValues, rawSet } = vi.hoisted(() => {
+  function attachChaining(target: any, c: any) {
+    if (target && target !== c && (typeof target === 'object' || typeof target === 'function')) {
+      target.select = (...args: any[]) => c.select(...args);
+      target.from = (...args: any[]) => c.from(...args);
+      target.where = (...args: any[]) => c.where(...args);
+      target.orderBy = (...args: any[]) => c.orderBy(...args);
+      target.limit = (...args: any[]) => c.limit(...args);
+      target.offset = (...args: any[]) => c.offset(...args);
+      target.update = (...args: any[]) => c.update(...args);
+      target.set = (...args: any[]) => c.set(...args);
+      target.insert = (...args: any[]) => c.insert(...args);
+      target.values = (...args: any[]) => c.values(...args);
+    }
+    return target;
+  }
+
+  const rawWhere = vi.fn();
+  const rawOrderBy = vi.fn();
+  const rawLimit = vi.fn();
+  const rawValues = vi.fn();
+  const rawSet = vi.fn();
+
+  const c: any = {};
+  c.select = vi.fn().mockReturnValue(c);
+  c.from = vi.fn().mockReturnValue(c);
+  c.update = vi.fn().mockReturnValue(c);
+  c.insert = vi.fn().mockReturnValue(c);
+
+  c.where = new Proxy(rawWhere, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? Promise.resolve([]), c);
+    },
+  });
+
+  c.orderBy = new Proxy(rawOrderBy, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? Promise.resolve([]), c);
+    },
+  });
+
+  c.limit = new Proxy(rawLimit, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? Promise.resolve([]), c);
+    },
+  });
+
+  c.values = new Proxy(rawValues, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? Promise.resolve([]), c);
+    },
+  });
+
+  c.set = new Proxy(rawSet, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? c, c);
+    },
+  });
+
+  return { chain: c, rawWhere, rawOrderBy, rawLimit, rawValues, rawSet };
 });
+
+vi.mock('../server/db/index.js', () => ({
+  db: chain,
+}));
 
 vi.mock('../server/db/schema.js', () => ({
   adversarialFlags: { id: 'id', issueId: 'issueId', rule: 'rule', severity: 'severity', details: 'details', resolvedAt: 'resolvedAt', modelVersion: 'modelVersion' },
@@ -76,12 +131,22 @@ import { adversarialService } from '../server/services/adversarialService.js';
 
 // ─── Test helpers ──────────────────────────────────────────────────────────── 
 function makeChain(terminalValues: Record<string, any> = {}) {
-  (db as any).select.mockReturnValue(db);
-  (db as any).from.mockReturnValue(db);
-  (db as any).where.mockReturnValue(db);
-  (db as any).orderBy.mockReturnValue(db);
-  (db as any).limit.mockResolvedValue(terminalValues.limit ?? []);
-  (db as any).where.mockResolvedValue(terminalValues.where ?? []);
+  rawWhere.mockReset();
+  rawOrderBy.mockReset();
+  rawLimit.mockReset();
+  rawValues.mockReset();
+  rawSet.mockReset();
+
+  chain.select.mockReturnValue(chain);
+  chain.from.mockReturnValue(chain);
+  chain.update.mockReturnValue(chain);
+  chain.insert.mockReturnValue(chain);
+
+  rawWhere.mockResolvedValue(terminalValues.where ?? []);
+  rawOrderBy.mockResolvedValue(terminalValues.orderBy ?? []);
+  rawLimit.mockResolvedValue(terminalValues.limit ?? []);
+  rawValues.mockResolvedValue([]);
+  rawSet.mockReturnValue(chain);
 }
 
 // ─── Test Suite ───────────────────────────────────────────────────────────────
@@ -186,9 +251,7 @@ describe('adversarialService', () => {
       (db as any).where
         .mockResolvedValueOnce([{ id: 'm1', issueId: 'iss-1', perceptualHash: 'ffffffffffffffff', exifLat: null, exifLng: null }])
         // Candidates with a very different hash
-        .mockResolvedValueOnce([{ id: 'm2', issueId: 'iss-2', perceptualHash: '0000000000000000' }])
-        // _insertFlag duplicate check → no existing flag
-        .mockResolvedValueOnce([]);
+        .mockResolvedValueOnce([{ id: 'm2', issueId: 'iss-2', perceptualHash: '0000000000000000' }]);
       const insertSpy = (db as any).values;
       await adversarialService.checkPhotoReuse('m1', 'iss-1');
       expect(insertSpy).not.toHaveBeenCalled();

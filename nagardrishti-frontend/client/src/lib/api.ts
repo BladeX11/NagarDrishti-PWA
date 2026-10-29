@@ -213,6 +213,8 @@ export interface ScorecardData {
   timestamp: string;
 }
 
+export type { EquityAnalysisResponse, EquityMetric, CategoryEquity, FairnessAlert } from '@shared/types';
+
 export const transparencyApi = {
   getScorecard(params?: { wardId?: string; departmentId?: string }) {
     const qs = new URLSearchParams();
@@ -229,7 +231,30 @@ export const transparencyApi = {
   getNeglectZones() {
     return request<{ wardIds: string[]; wardNames: Record<string, string> }>('/transparency/neglect-zones');
   },
+  getEquity() {
+    return request<import('@shared/types').EquityAnalysisResponse>('/transparency/equity');
+  },
+  getCascades(wardId?: string) {
+    const qs = wardId ? `?wardId=${encodeURIComponent(wardId)}` : '';
+    return request<import('@shared/types').CascadeAlert[]>(`/transparency/cascades${qs}`);
+  },
 };
+
+export type { CascadeAlert } from '@shared/types';
+
+export const cascadeApi = {
+  getAlerts(wardId?: string) {
+    const qs = wardId ? `?wardId=${encodeURIComponent(wardId)}` : '';
+    return request<import('@shared/types').CascadeAlert[]>(`/officer/cascades${qs}`);
+  },
+  acknowledge(id: string) {
+    return request(`/officer/cascades/${id}/ack`, { method: 'POST' });
+  },
+  triggerDetection() {
+    return request<unknown>('/officer/cascades/detect', { method: 'POST' });
+  },
+};
+
 
 // ── Research ─────────────────────────────────────────────────────────────────
 

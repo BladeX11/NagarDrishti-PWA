@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { issues, issueMedia, issueSupporters, verificationVotes, statusEvents } from '../db/schema.js';
+import { issues, issueMedia, issueSupporters, verificationVotes, statusEvents, users } from '../db/schema.js';
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { privacyService } from './privacyService.js';
 import { auditService } from './auditService.js';
@@ -7,6 +7,7 @@ import { priorityService } from './priorityService.js';
 import { nanoid } from 'nanoid';
 import { aiQueue } from '../ai/queue.js';
 import { inactionService } from './inactionService.js';
+import { WARD_NAMES } from '../../shared/types.js';
 
 function generatePublicRef(): string {
   // Use timestamp + random to avoid collisions with seeded ND-101..ND-125 after server restarts
@@ -149,7 +150,7 @@ export const issueService = {
   /**
    * Get a single issue by ID or publicRef, with media.
    */
-  async getIssue(idOrRef: string) {
+  async getIssue(idOrRef: string, currentUserId?: string) {
     let issue = null;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrRef);
     
@@ -162,6 +163,30 @@ export const issueService = {
     }
 
     if (!issue) return null;
+
+    let hasSupported = false;
+    if (currentUserId) {
+      try {
+        const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUserId);
+        let checkUserId = currentUserId;
+        if (!isUserUuid) {
+          const [u] = await db.select().from(users).where(eq(users.role, 'citizen')).limit(1);
+          if (u) checkUserId = u.id;
+        }
+        const sup = await db
+          .select()
+          .from(issueSupporters)
+          .where(
+            and(
+              eq(issueSupporters.issueId, issue.id),
+              eq(issueSupporters.userId, checkUserId)
+            )
+          );
+        hasSupported = sup.length > 0;
+      } catch {
+        // Fallback
+      }
+    }
 
     const media = await db
       .select()
@@ -216,6 +241,8 @@ export const issueService = {
       // Fallback
     }
 
+    const wardName = issue.wardId ? (WARD_NAMES[issue.wardId] || issue.wardId) : 'Ward 11';
+
     return {
       ...issue,
       // Public location (coarsened)
@@ -224,6 +251,10 @@ export const issueService = {
       age,
       updatedAge,
       ageInDays,
+      ward: wardName,
+      supporters: issue.supporterCount ?? 0,
+      supporterCount: issue.supporterCount ?? 0,
+      hasSupported,
       media,
       verificationVotes: {
         fixed: fixedVotes,
@@ -245,7 +276,7 @@ export const issueService = {
     departmentId?: string;
     page?: number;
     limit?: number;
-  }) {
+  }, currentUserId?: string) {
     const page = filters.page ?? 1;
     const limit = filters.limit ?? 20;
     const offset = (page - 1) * limit;
@@ -275,11 +306,40 @@ export const issueService = {
 
     const total = Number(countResult[0]?.count ?? 0);
 
+    let supportedSet = new Set<string>();
+    if (currentUserId) {
+      try {
+        const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUserId);
+        let checkUserId = currentUserId;
+        if (!isUserUuid) {
+          const [u] = await db.select().from(users).where(eq(users.role, 'citizen')).limit(1);
+          if (u) checkUserId = u.id;
+        }
+        const userSups = await db
+          .select({ issueId: issueSupporters.issueId })
+          .from(issueSupporters)
+          .where(eq(issueSupporters.userId, checkUserId));
+        supportedSet = new Set(userSups.map((s) => s.issueId).filter(Boolean) as string[]);
+      } catch {
+        // Fallback
+      }
+    }
+
     const items = results.map((issue) => {
       const { age, ageInDays } = computeAge(issue.createdAt!);
       const updatedAge = computeAge(issue.updatedAt || issue.createdAt!).age;
+      const wardName = issue.wardId ? (WARD_NAMES[issue.wardId] || issue.wardId) : 'Ward 11';
+      const slaDeadlineDays = issue.slaDeadline ? Math.max(1, Math.round((new Date(issue.slaDeadline).getTime() - new Date(issue.createdAt!).getTime()) / 86400000)) : 3;
+      const slaBreach = issue.slaDeadline ? (new Date(issue.slaDeadline).getTime() < Date.now() && issue.status !== 'Verified Fixed' && issue.status !== 'Claimed Resolved') : false;
+
       return {
         ...issue,
+        ward: wardName,
+        supporters: issue.supporterCount ?? 0,
+        supporterCount: issue.supporterCount ?? 0,
+        hasSupported: supportedSet.has(issue.id),
+        slaBreach,
+        slaDeadlineDays,
         latitude: issue.publicLat,
         longitude: issue.publicLng,
         age,
@@ -320,14 +380,35 @@ export const issueService = {
    * Support (upvote) an issue.
    */
   async supportIssue(issueId: string, userId: string) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(issueId);
+    let issue = null;
+    if (isUuid) {
+      const results = await db.select().from(issues).where(eq(issues.id, issueId));
+      issue = results[0];
+    } else {
+      const results = await db.select().from(issues).where(eq(issues.publicRef, issueId));
+      issue = results[0];
+    }
+    if (!issue) throw new Error('Issue not found');
+
+    const realIssueId = issue.id;
+
+    // Resolve userId if demo or non-uuid
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    let realUserId = userId;
+    if (!isUserUuid) {
+      const [u] = await db.select().from(users).where(eq(users.role, 'citizen')).limit(1);
+      if (u) realUserId = u.id;
+    }
+
     // Check if already supporting
     const existing = await db
       .select()
       .from(issueSupporters)
       .where(
         and(
-          eq(issueSupporters.issueId, issueId),
-          eq(issueSupporters.userId, userId)
+          eq(issueSupporters.issueId, realIssueId),
+          eq(issueSupporters.userId, realUserId)
         )
       );
 
@@ -336,22 +417,24 @@ export const issueService = {
     }
 
     // Add supporter
-    await db.insert(issueSupporters).values({ issueId, userId });
+    await db.insert(issueSupporters).values({ issueId: realIssueId, userId: realUserId });
 
     // Increment count
-    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
-    if (!issue) throw new Error('Issue not found');
-
     const [updated] = await db
       .update(issues)
       .set({
         supporterCount: (issue.supporterCount ?? 0) + 1,
         updatedAt: new Date(),
       })
-      .where(eq(issues.id, issueId))
+      .where(eq(issues.id, realIssueId))
       .returning();
 
-    return updated;
+    return {
+      ...updated,
+      supporters: updated.supporterCount ?? 0,
+      supporterCount: updated.supporterCount ?? 0,
+      hasSupported: true,
+    };
   },
 
   /**

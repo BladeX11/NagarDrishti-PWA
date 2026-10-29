@@ -44,10 +44,14 @@ export const workflowService = {
     actorRole: string,
     reason?: string
   ) {
-    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(issueId);
+    const [issue] = isUuid
+      ? await db.select().from(issues).where(eq(issues.id, issueId))
+      : await db.select().from(issues).where(eq(issues.publicRef, issueId));
     if (!issue) {
       throw new Error('Issue not found');
     }
+    const realIssueId = issue.id;
 
     const fromStatus = issue.status;
 
@@ -79,7 +83,7 @@ export const workflowService = {
 
     // 4. Adversarial check for Verified Fixed
     if (toStatus === 'Verified Fixed') {
-      const activeFlags = await adversarialService.getActiveFlags(issueId);
+      const activeFlags = await adversarialService.getActiveFlags(realIssueId);
       const highFlags = activeFlags.filter(f => f.severity === 'high' && !f.resolvedAt);
       if (highFlags.length > 0) {
         throw new Error(
@@ -91,7 +95,7 @@ export const workflowService = {
 
     // 5. Append to audit ledger (hash-chained)
     await auditService.appendStatusEvent({
-      issueId,
+      issueId: realIssueId,
       fromStatus,
       toStatus,
       actorId,
@@ -113,7 +117,7 @@ export const workflowService = {
     const [updated] = await db
       .update(issues)
       .set(updateData)
-      .where(eq(issues.id, issueId))
+      .where(eq(issues.id, realIssueId))
       .returning();
 
     return updated;

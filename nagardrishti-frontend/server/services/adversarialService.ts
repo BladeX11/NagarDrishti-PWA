@@ -245,9 +245,14 @@ export const adversarialService = {
   },
 
   async getActiveFlags(issueId: string) {
+    let realId = issueId;
+    if (issueId.startsWith('ND-')) {
+      const [issue] = await db.select({ id: issues.id }).from(issues).where(eq(issues.publicRef, issueId));
+      if (issue) realId = issue.id;
+    }
     return await db.select()
       .from(adversarialFlags)
-      .where(eq(adversarialFlags.issueId, issueId));
+      .where(eq(adversarialFlags.issueId, realId));
   },
 
   async resolveFlag(flagId: string, resolution: string, resolvedBy: string) {

@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-const tabs=[{to:'/transparency',label:'Issue map',end:true},{to:'/transparency/scorecards',label:'Scorecards'},{to:'/transparency/sla-breaches',label:'SLA breaches'},{to:'/transparency/forgotten',label:'Forgotten issues'}];
+const tabs=[{to:'/transparency',label:'Issue map',end:true},{to:'/transparency/scorecards',label:'Scorecards'},{to:'/transparency/equity',label:'Ward equity (N1)'},{to:'/transparency/sla-breaches',label:'SLA breaches'},{to:'/transparency/forgotten',label:'Forgotten issues'}];
 export function PublicLayout(){return <div className="min-h-screen bg-[#F5EFE3] text-[#2A3320]">
   <header className="sticky top-0 z-40 border-b-4 border-[#2A3320] bg-[#F5EFE3]">
     <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">

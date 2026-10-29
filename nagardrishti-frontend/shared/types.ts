@@ -66,6 +66,18 @@ export const WARD_NAMES: Record<string, string> = {
   "ward-15": "Ward 15",
 };
 
+export type WardType = "planned" | "unplanned" | "mixed" | "peri-urban";
+export type DensityTier = "high" | "medium" | "low";
+export type TaxBand = "A" | "B" | "C" | "D";
+
+export interface WardMetadata {
+  id: string;
+  name: string;
+  wardType: WardType;
+  densityTier: DensityTier;
+  taxBand: TaxBand;
+}
+
 export const DEPARTMENTS = [
   "roads",
   "waste",
@@ -261,3 +273,72 @@ export interface ChainIntegrityResponse {
   brokenAt?: number;
   checkedAt: string;
 }
+
+// ── Equity Types (N1) ─────────────────────────────────────────────────────────
+
+export interface EquityMetric {
+  wardType: WardType;
+  totalIssues: number;
+  resolvedIssues: number;
+  medianResponseDays: number;
+  medianResolutionDays: number;
+  slaComplianceRate: number;
+  reopenRate: number;
+}
+
+export interface StatisticalTestResult {
+  hStatistic: number;
+  pValue: number;
+  degreesOfFreedom: number;
+  significant: boolean;
+  underservedWardType: WardType | null;
+  effectSizeDays: number;
+  note?: string;
+}
+
+export interface CategoryEquityGap {
+  plannedMedianResponse: number;
+  unplannedMedianResponse: number;
+  gapDays: number;
+  disparityRatio: number;
+}
+
+export interface CategoryEquity {
+  category: Category;
+  metricsByWardType: Partial<Record<WardType, EquityMetric>>;
+  gap: CategoryEquityGap;
+  statisticalTest: StatisticalTestResult;
+}
+
+export interface FairnessAlert {
+  category: string;
+  message: string;
+  disparityRatio: number;
+  severity: 'low' | 'medium' | 'high';
+}
+
+export interface EquityAnalysisResponse {
+  overallByWardType: Partial<Record<WardType, EquityMetric>>;
+  categories: CategoryEquity[];
+  alerts: FairnessAlert[];
+  totalIssuesAnalyzed: number;
+  generatedAt: string;
+}
+
+// ── Cascade Types (N4) ────────────────────────────────────────────────────────
+
+export interface CascadeAlert {
+  id: string;
+  wardId: string | null;
+  centerLat: number;
+  centerLng: number;
+  radiusMeters: number;
+  issueIds: string[];
+  categories: string[];
+  suggestedRootCause: string;
+  confidence: 'low' | 'medium' | 'high';
+  status: 'active' | 'acknowledged' | 'resolved';
+  createdAt: string;
+}
+
+

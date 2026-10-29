@@ -2,27 +2,96 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { inactionService } from '../server/services/inactionService.js';
 import { db } from '../server/db/index.js';
 
-// Mock the db with a stable chain that survives vi.resetAllMocks()
-vi.mock('../server/db/index.js', () => {
-  const chain: any = {};
-  chain.select = vi.fn().mockReturnValue(chain);
-  chain.from = vi.fn().mockReturnValue(chain);
-  chain.where = vi.fn().mockReturnValue(chain);
-  chain.orderBy = vi.fn().mockResolvedValue([]);
-  chain.update = vi.fn().mockReturnValue(chain);
-  chain.set = vi.fn().mockReturnValue(chain);
-  chain.insert = vi.fn().mockReturnValue(chain);
-  chain.values = vi.fn().mockResolvedValue([]);
-  return { db: chain };
+// Mock the db with a chainable and awaitable proxy that supports .where(...).orderBy(...)
+const { chain, rawWhere, rawOrderBy, rawLimit, rawValues, rawSet } = vi.hoisted(() => {
+  function attachChaining(target: any, c: any) {
+    if (target && target !== c && (typeof target === 'object' || typeof target === 'function')) {
+      target.select = (...args: any[]) => c.select(...args);
+      target.from = (...args: any[]) => c.from(...args);
+      target.where = (...args: any[]) => c.where(...args);
+      target.orderBy = (...args: any[]) => c.orderBy(...args);
+      target.limit = (...args: any[]) => c.limit(...args);
+      target.offset = (...args: any[]) => c.offset(...args);
+      target.update = (...args: any[]) => c.update(...args);
+      target.set = (...args: any[]) => c.set(...args);
+      target.insert = (...args: any[]) => c.insert(...args);
+      target.values = (...args: any[]) => c.values(...args);
+    }
+    return target;
+  }
+
+  const rawWhere = vi.fn();
+  const rawOrderBy = vi.fn();
+  const rawLimit = vi.fn();
+  const rawValues = vi.fn();
+  const rawSet = vi.fn();
+
+  const c: any = {};
+  c.select = vi.fn().mockReturnValue(c);
+  c.from = vi.fn().mockReturnValue(c);
+  c.update = vi.fn().mockReturnValue(c);
+  c.insert = vi.fn().mockReturnValue(c);
+
+  c.where = new Proxy(rawWhere, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? Promise.resolve([]), c);
+    },
+  });
+
+  c.orderBy = new Proxy(rawOrderBy, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? Promise.resolve([]), c);
+    },
+  });
+
+  c.limit = new Proxy(rawLimit, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? Promise.resolve([]), c);
+    },
+  });
+
+  c.values = new Proxy(rawValues, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? Promise.resolve([]), c);
+    },
+  });
+
+  c.set = new Proxy(rawSet, {
+    apply(target, thisArg, args) {
+      const res = Reflect.apply(target, thisArg, args);
+      return attachChaining(res ?? c, c);
+    },
+  });
+
+  return { chain: c, rawWhere, rawOrderBy, rawLimit, rawValues, rawSet };
 });
+
+vi.mock('../server/db/index.js', () => ({
+  db: chain,
+}));
 
 describe('inactionService', () => {
   beforeEach(() => {
-    // Only reset call counts — do NOT reset implementations
-    vi.clearAllMocks();
-    // Re-stub the terminal .orderBy and .where to return empty by default
-    (db as any).orderBy.mockResolvedValue([]);
-    (db as any).where.mockResolvedValue([]);
+    rawWhere.mockReset();
+    rawOrderBy.mockReset();
+    rawLimit.mockReset();
+    rawValues.mockReset();
+    rawSet.mockReset();
+
+    chain.select.mockReturnValue(chain);
+    chain.from.mockReturnValue(chain);
+    chain.update.mockReturnValue(chain);
+    chain.insert.mockReturnValue(chain);
+
+    rawWhere.mockResolvedValue([]);
+    rawOrderBy.mockResolvedValue([]);
+    rawLimit.mockResolvedValue([]);
+    rawValues.mockResolvedValue([]);
+    rawSet.mockReturnValue(chain);
   });
 
   describe('computeTier', () => {

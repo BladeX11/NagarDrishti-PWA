@@ -34,7 +34,7 @@ export const WARD_CENTROIDS: Record<string, [number, number]> = {
   'ward-15': [18.5529, 73.9053], // Kalyani Nagar
 };
 
-export function MapView({ issues, selectedId, onSelectIssue, height = '520px', publicView = false, pinPosition, onPinChange, neglectZoneWards = [] }: { issues: any[]; selectedId?: string; onSelectIssue?: (issue: any) => void; height?: string; publicView?: boolean; pinPosition?: [number, number]; onPinChange?: (position: [number, number]) => void; neglectZoneWards?: string[] }) {
+export function MapView({ issues, selectedId, onSelectIssue, height = '520px', publicView = false, pinPosition, onPinChange, neglectZoneWards = [], cascadeAlerts = [] }: { issues: any[]; selectedId?: string; onSelectIssue?: (issue: any) => void; height?: string; publicView?: boolean; pinPosition?: [number, number]; onPinChange?: (position: [number, number]) => void; neglectZoneWards?: string[]; cascadeAlerts?: import('@shared/types').CascadeAlert[] }) {
   const pin = coarsen(pinPosition);
   return (
     <div className="map-frame relative" style={{ height }}>
@@ -94,6 +94,43 @@ export function MapView({ issues, selectedId, onSelectIssue, height = '520px', p
           if (!centroid) return null;
           return <Circle key={wardId} center={centroid} radius={1500} pathOptions={{ color: '#8B0000', weight: 2, fillColor: '#8B0000', fillOpacity: 0.2, dashArray: '4 4' }} />
         })}
+        {cascadeAlerts.map(cascade => (
+          <Circle
+            key={cascade.id}
+            center={[cascade.centerLat, cascade.centerLng]}
+            radius={cascade.radiusMeters}
+            pathOptions={{
+              color: '#B8892D',
+              weight: 3,
+              fillColor: '#B8892D',
+              fillOpacity: 0.16,
+              dashArray: '6 6',
+            }}
+          >
+            <Tooltip direction="top" offset={[0, -8]}>Cascade: {cascade.suggestedRootCause}</Tooltip>
+            <Popup>
+              <div className="min-w-56 font-sans text-[#2A3320]">
+                <p className="text-[9px] font-black uppercase tracking-widest text-[#B8892D]">
+                  Infrastructure Cascade Alert (N4)
+                </p>
+                <p className="mt-1 text-sm font-black">{cascade.suggestedRootCause}</p>
+                <p className="mt-1 text-xs text-[#2A3320]/75">
+                  {cascade.issueIds.length} connected issues · {cascade.categories.length} categories:
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {cascade.categories.map((c) => (
+                    <span key={c} className="border border-[#2A3320] bg-[#D8C9A8]/40 px-1.5 py-0.5 text-[8px] font-bold">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-[9px] font-black uppercase tracking-wider text-[#2A3320]/60">
+                  Confidence: {cascade.confidence.toUpperCase()} · Radius: {cascade.radiusMeters}m
+                </p>
+              </div>
+            </Popup>
+          </Circle>
+        ))}
       </MapContainer>
       <div className="absolute bottom-3 left-3 z-[500] border-4 border-[#2A3320] bg-[#FDFBF7] p-3 shadow-[3px_3px_0px_0px_#2A3320]">
         {publicView ? (
@@ -107,6 +144,12 @@ export function MapView({ issues, selectedId, onSelectIssue, height = '520px', p
                 </span>
               ))}
             </div>
+            {cascadeAlerts.length > 0 && (
+              <div className="mt-2 border-t border-[#E8E0D0] pt-2 text-[9px] font-bold text-[#B8892D]">
+                <span className="inline-block h-2 w-2 rounded-full border border-[#B8892D] bg-[#B8892D]/40 mr-1" />
+                Cascade Alert Zone
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -114,6 +157,12 @@ export function MapView({ issues, selectedId, onSelectIssue, height = '520px', p
             <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-bold">
               {[['Open', '#B8892D'], ['In progress', '#4F5B2A'], ['Resolved', '#2A3320']].map(([label, color]) => <span key={label} className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-full border border-[#2A3320]" style={{ backgroundColor: color }} />{label}</span>)}
             </div>
+            {cascadeAlerts.length > 0 && (
+              <div className="mt-2 border-t border-[#E8E0D0] pt-2 text-[9px] font-bold text-[#B8892D]">
+                <span className="inline-block h-2 w-2 rounded-full border border-[#B8892D] bg-[#B8892D]/40 mr-1" />
+                Cascade Alert Zone
+              </div>
+            )}
           </>
         )}
       </div>

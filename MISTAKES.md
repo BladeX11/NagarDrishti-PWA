@@ -47,3 +47,27 @@
 **Context:** `client/src/pages/citizen/CitizenPages.tsx` CitizenIssueDetail and `server/services/issueService.ts` getIssue
 **Solution:** Populated `verificationVotes` and `events` in `issueService.getIssue()` and added optional chaining with safe defaults (`issue.verificationVotes ?? { fixed: 0, notFixed: 0, unsure: 0 }`) in the frontend.
 **Date:** 2026-09-30
+
+### Vitest Drizzle Mock Chaining and Queue Leakage
+**Problem:** Vitest unit tests in `adversarialService.test.ts` and `inactionService.test.ts` failed with `db.select(...).from(...).where(...).orderBy is not a function` and leftover `mockResolvedValueOnce` calls poisoned subsequent tests.
+**Context:** Chained Drizzle queries like `db.select().from(statusEvents).where(...).orderBy(...)` when `(db as any).where` was mocked directly with `mockResolvedValue`.
+**Solution:** Wrapped mock methods in Proxy handlers inside `vi.hoisted()` that attach chaining methods (`orderBy`, `limit`, etc.) to returned Promises while guarding against mutating the mock chain itself (`target !== c`). Reset mock queues using `mockReset()` in `beforeEach` to prevent test-to-test mock pollution.
+**Date:** 2026-10-01
+
+### Officer Triage Queue Crash and Hardcoded Detail View
+**Problem:** Officer triage queue crashed with a blank white screen because `issue.ward.replace(...)` threw a TypeError on API issues lacking `ward`. Furthermore, `OfficerIssueDetail` only checked `seedIssues.find()`, ignoring real database issues.
+**Context:** `client/src/pages/officer/OfficerPages.tsx` (TriageQueue & OfficerIssueDetail)
+**Solution:** Added `getWardLabel()` with fallback dictionary mapping `wardId` to ward name, guarded against undefined `ward`, dynamically fetched issue data via `issuesApi.get(id)`, and wired real status updates.
+**Date:** 2026-10-01
+
+### Issue Support Count Not Incrementing and PublicRef Query Failure
+**Problem:** Clicking Support on cards or issue details did not increment the count. The frontend handlers only updated local mock state without calling the API, and `issueService.supportIssue` threw PostgreSQL syntax errors when querying `issueSupporters` with `publicRef` strings against UUID columns.
+**Context:** `server/services/issueService.ts`, `server/routes/issues.ts`, `client/src/components/shared/IssueCard.tsx`, and `client/src/pages/citizen/CitizenPages.tsx`
+**Solution:** Resolved `publicRef` to real UUID before database operations in `supportIssue` and `workflowService.transitionStatus`, passed authenticated user ID to check `hasSupported`, and wired optimistic updates with Sonner toast feedback in `IssueCard` and `CitizenIssueDetail`.
+**Date:** 2026-10-01
+
+### Cascade Alert Duplicate Insertion on Repeated Scans
+**Problem:** Triggering cascade scans repeatedly or via periodic detection crons caused duplicate rows to be inserted into `cascade_alerts` for the same geographic cluster because the table lacked a compound unique constraint on float coordinates.
+**Context:** `server/services/cascadeService.ts` detectCascades
+**Solution:** Added pre-insertion query of existing active alerts and used Haversine distance threshold (`dist <= Math.max(cascade.radiusMeters, existing.radiusMeters)`) to detect identical spatial zones. Existing active alerts are updated with the latest issue IDs and cluster metrics instead of inserting duplicate rows.
+**Date:** 2026-10-03

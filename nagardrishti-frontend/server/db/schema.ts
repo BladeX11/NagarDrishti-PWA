@@ -22,6 +22,9 @@ export const sessions = pgTable('sessions', {
 export const wards = pgTable('wards', {
   id: text('id').primaryKey(), // 'ward-11', etc.
   name: text('name').notNull(),
+  wardType: text('ward_type'), // planned | unplanned | mixed | peri-urban
+  densityTier: text('density_tier'), // high | medium | low
+  taxBand: text('tax_band'), // A | B | C | D
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -219,3 +222,24 @@ export const scorecardSnapshots = pgTable('scorecard_snapshots', {
   methodVersion: text('method_version').default('v1.0'),
   snapshotAt: timestamp('snapshot_at').defaultNow(),
 });
+
+export const cascadeAlerts = pgTable('cascade_alerts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  wardId: text('ward_id').references(() => wards.id),
+  centerLat: doublePrecision('center_lat').notNull(),
+  centerLng: doublePrecision('center_lng').notNull(),
+  radiusMeters: doublePrecision('radius_meters').notNull(),
+  issueIds: jsonb('issue_ids').notNull(), // string[] UUIDs of issues
+  categories: jsonb('categories').notNull(), // string[] unique categories
+  suggestedRootCause: text('suggested_root_cause').notNull(),
+  confidence: text('confidence').notNull().default('medium'), // low | medium | high
+  status: text('status').notNull().default('active'), // active | acknowledged | resolved
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+  return {
+    wardIdx: index('idx_cascade_alerts_ward_id').on(table.wardId),
+    statusIdx: index('idx_cascade_alerts_status').on(table.status),
+    createdAtIdx: index('idx_cascade_alerts_created_at').on(table.createdAt),
+  };
+});
+

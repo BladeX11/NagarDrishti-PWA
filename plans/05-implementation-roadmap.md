@@ -92,7 +92,7 @@ _Estimated effort: 1-2 sessions_
 
 ---
 
-## Phase 3: Inaction Amplification + Public Transparency [NOT STARTED]
+## Phase 3: Inaction Amplification + Public Transparency [COMPLETED]
 _Estimated effort: 1-2 sessions_
 
 > **Goal:** Public dashboard shows live escalating pressure. Neglect zones visible.
@@ -139,7 +139,7 @@ _Estimated effort: 2-3 sessions_
 
 ---
 
-## Phase 5: Equity Analysis (N1) + Cascade Detection (N4) [NOT STARTED]
+## Phase 5: Equity Analysis (N1) + Cascade Detection (N4) [COMPLETED]
 _Estimated effort: 2 sessions_
 
 > **Goal:** Ward equity measured and published. Infrastructure cascades detected.
@@ -148,16 +148,16 @@ _Estimated effort: 2 sessions_
 
 | # | Task | Files | Status |
 |---|---|---|---|
-| 5.1 | Add ward metadata columns + seed data | `schema.ts`, `seed.ts` | NOT DONE |
-| 5.2 | Build equity analysis engine (weekly computation) | New: `server/services/equityService.ts` | NOT DONE |
-| 5.3 | Build equity dashboard (heatmap + gap charts) | `PublicPages.tsx` | NOT DONE |
-| 5.4 | Create cascade_alerts table | `schema.ts`, new migration | NOT DONE |
-| 5.5 | Implement DBSCAN cascade detection (daily cron) | New: `server/services/cascadeService.ts` | NOT DONE |
-| 5.6 | Build cascade UI (officer map + public dashboard) | `OfficerPages.tsx`, `PublicPages.tsx` | NOT DONE |
+| 5.1 | Add ward metadata columns + seed data | `schema.ts`, `seed.ts` | DONE |
+| 5.2 | Build equity analysis engine (weekly computation) | New: `server/services/equityService.ts` | DONE |
+| 5.3 | Build equity dashboard (heatmap + gap charts) | `PublicPages.tsx` | DONE |
+| 5.4 | Create cascade_alerts table | `schema.ts`, new migration | DONE |
+| 5.5 | Implement DBSCAN cascade detection (daily cron) | New: `server/services/cascadeService.ts` | DONE |
+| 5.6 | Build cascade UI (officer map + public dashboard) | `OfficerPages.tsx`, `PublicPages.tsx` | DONE |
 
 ### Done When
-- [ ] Equity page shows measurable gap between ward types
-- [ ] Cascade alert: 3+ different categories within 500m -> root cause suggestion
+- [x] Equity page shows measurable gap between ward types
+- [x] Cascade alert: 3+ different categories within 500m -> root cause suggestion
 
 ---
 

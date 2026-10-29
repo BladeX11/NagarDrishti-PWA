@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { AlertTriangle, ArrowLeft, ArrowRight, BarChart3, Check, CircleAlert, ClipboardList, Clock3, FileCheck2, MapPin, Search, ShieldCheck, Users, X } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { issues as seedIssues, statusEvents } from '../../data/seed';
-import { issuesApi, adversarialApi, type ApiIssue, type AdversarialFlag } from '../../lib/api';
+import { issuesApi, adversarialApi, cascadeApi, type ApiIssue, type AdversarialFlag, type CascadeAlert } from '../../lib/api';
 import type { Issue, IssueStatus } from '../../types';
 import { ActivityTimeline } from '../../components/shared/ActivityTimeline';
 import { Button } from '../../components/shared/Button';
@@ -15,50 +15,697 @@ import { MetricCard } from '../../components/shared/MetricCard';
 import { PageHeader, Panel, CategoryIcon } from '../../components/shared/Primitives';
 import { StatusBadge } from '../../components/shared/StatusBadge';
 
-const COLORS=['#4F5B2A','#B8892D','#D8C9A8','#6B7A3A'];
-const smallTip={contentStyle:{backgroundColor:'#2A3320',border:0,borderRadius:0,color:'#fff',fontSize:11},itemStyle:{color:'#fff'}};
+const COLORS = ['#4F5B2A', '#B8892D', '#D8C9A8', '#6B7A3A'];
+const smallTip = { contentStyle: { backgroundColor: '#2A3320', border: 0, borderRadius: 0, color: '#fff', fontSize: 11 }, itemStyle: { color: '#fff' } };
 
-export function OfficerOverview(){
-  const wards=[{ward:'Ward 11',open:11},{ward:'Ward 12',open:17},{ward:'Ward 14',open:8},{ward:'Ward 15',open:12}];
-  const cats=[{name:'Roads',value:35},{name:'Waste',value:25},{name:'Electrical',value:20},{name:'Other',value:20}];
-  const latest=[...statusEvents].sort((a,b)=>b.timestamp.localeCompare(a.timestamp)).slice(0,5);
-  return <div><PageHeader eyebrow="Officer workspace · Ward 11 & 12" title="Good morning, Priya." description="Here’s what needs attention across your wards." action={<span className="border-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-wider">Thu · 25 Sep 2026</span>}/>
-    <div className="mb-8 grid grid-cols-2 gap-4 xl:grid-cols-4"><MetricCard value="12" label="Open queue" sublabel="+3 since yesterday" icon={ClipboardList} accentColor="olive"/><MetricCard value="5" label="In progress" sublabel="Across Ward 11 & 12" icon={Clock3} accentColor="gold"/><MetricCard value="3" label="Claimed resolved" sublabel="Awaiting verification" icon={FileCheck2} accentColor="sand"/><MetricCard value="2" label="SLA breaches" sublabel="Needs attention" icon={AlertTriangle} accentColor="olive"/></div>
-    <div className="mb-8 grid gap-6 xl:grid-cols-2"><Panel className="chart-panel border-4"><div className="mb-5 flex items-start justify-between"><div><p className="eyebrow">Operational load</p><h2 className="display-title mt-1 text-lg">Ward workload</h2></div><BarChart3 size={19}/></div><ResponsiveContainer width="100%" height={240}><BarChart data={wards} margin={{top:6,right:12,left:-18,bottom:2}}><CartesianGrid stroke="#E8E0D0" strokeDasharray="4 4" vertical={false}/><XAxis dataKey="ward" tick={{fill:'#2A3320',fontWeight:700,fontSize:10}} axisLine={{stroke:'#2A3320'}} tickLine={false}/><YAxis tick={{fill:'#2A3320',fontWeight:700,fontSize:9}} axisLine={false} tickLine={false}/><Tooltip {...smallTip}/><Bar dataKey="open" name="Open issues" fill="#4F5B2A" radius={0} barSize={32} isAnimationActive={false}/></BarChart></ResponsiveContainer><p className="mt-2 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/50">Open issues · synthetic records</p></Panel>
-      <Panel className="chart-panel border-4"><div className="mb-3"><p className="eyebrow">Incoming reports</p><h2 className="display-title mt-1 text-lg">Category breakdown</h2></div><div className="grid items-center gap-2 sm:grid-cols-[1fr_1fr]"><ResponsiveContainer width="100%" height={230}><PieChart><Pie data={cats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={82} innerRadius={0} labelLine={false} label={({percent})=>`${Math.round((percent||0)*100)}%`} stroke="#2A3320" strokeWidth={2} isAnimationActive={false}>{cats.map((_,index)=><Cell key={index} fill={COLORS[index%COLORS.length]}/>)}</Pie><Tooltip {...smallTip}/></PieChart></ResponsiveContainer><div className="space-y-3">{cats.map((item,index)=><div key={item.name} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider"><i className="h-3 w-3 border border-[#2A3320]" style={{backgroundColor:COLORS[index]}}/>{item.name}<span className="ml-auto">{item.value}%</span></div>)}</div></div></Panel></div>
-    <section className="mb-8 border-4 border-[#B8892D] bg-[#B8892D]/10 p-5 md:p-6"><div className="mb-3 flex items-center gap-2"><AlertTriangle size={18}/><h2 className="display-title text-lg">Priority alerts</h2></div>{[['2 issues approaching SLA deadline','Pothole near market — 18 supporters, still open after 3 days'],['Reopened issue needs re-attention','Loose paving outside Pune station — community reported the repair did not hold'],['Highest priority in queue','Uncovered manhole at Erandwane — safety hazard reported today']].map(([title,desc])=><div key={title} className="border-t-2 border-[#B8892D]/30 py-3"><p className="text-xs font-black">⚠ {title}</p><p className="mt-1 text-xs text-[#2A3320]/75">{desc}</p></div>)}</section>
-    <div className="grid gap-6 lg:grid-cols-[1fr_auto]"><section><div className="mb-3 flex items-end justify-between border-b-4 border-[#2A3320] pb-3"><div><p className="eyebrow">Latest changes</p><h2 className="display-title mt-1 text-lg">Recent activity</h2></div><a href="/officer/queue" className="text-[9px] font-black uppercase tracking-wider text-[#4F5B2A] underline">Full queue →</a></div><Panel className="border-4"><ActivityTimeline events={latest}/></Panel></section><aside className="grid grid-cols-2 gap-3 lg:w-64 lg:grid-cols-1"><a href="/officer/queue"><Button className="w-full">View full queue →</Button></a><a href="/transparency"><Button variant="outline" className="w-full">Public map ↗</Button></a><div className="border-2 border-[#2A3320] bg-[#D8C9A8]/40 p-4"><p className="eyebrow">Ward coverage</p><p className="display-title mt-2 text-2xl">11 + 12</p><p className="mt-1 text-[10px] text-[#2A3320]/60">2 service areas</p></div></aside></div></div>;
+const WARD_NAMES: Record<string, string> = {
+  'ward-11': 'Ward 11',
+  'ward-12': 'Ward 12',
+  'ward-14': 'Ward 14',
+  'ward-15': 'Ward 15',
+  'Ward 11': 'Ward 11',
+  'Ward 12': 'Ward 12',
+  'Ward 14': 'Ward 14',
+  'Ward 15': 'Ward 15',
+};
+
+function getWardLabel(issue: any): string {
+  if (issue?.ward) return issue.ward;
+  if (issue?.wardId) return WARD_NAMES[issue.wardId] || issue.wardId;
+  return 'Ward 11';
 }
 
-export function TriageQueue(){
-  const navigate=useNavigate(); const [filters,setFilters]=useState({status:'All',category:'All',ward:'All'}); const [sort,setSort]=useState('Newest'); const [query,setQuery]=useState(''); const [apiIssues,setApiIssues]=useState<ApiIssue[]>([]); useEffect(()=>{issuesApi.list({limit:100}).then(r=>setApiIssues(r.items)).catch(()=>{});},[]);
-  const source=apiIssues.length>0?apiIssues:seedIssues; const data=useMemo(()=>{const filtered=(source as any[]).filter(issue=>(filters.status==='All'||issue.status===filters.status)&&(filters.category==='All'||issue.category===filters.category)&&issue.title.toLowerCase().includes(query.toLowerCase()));return filtered.sort((a:any,b:any)=>sort==='Oldest'?b.ageInDays-a.ageInDays:sort==='Most supporters'?(b.supporters||b.supporterCount||0)-(a.supporters||a.supporterCount||0):a.createdAt.localeCompare(b.createdAt));},[filters,sort,query,source]);
-  return <div><PageHeader eyebrow="Officer workspace" title="Triage queue" description="Filter, prioritise, and route incoming civic issues." action={<span className="border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[10px] font-black uppercase tracking-wider">{data.length} issues</span>}/>
-    <div className="mb-5 flex flex-col gap-4 border-2 border-[#2A3320] bg-[#FDFBF7] p-4"><div className="flex flex-wrap gap-2"><FilterBar filters={[{key:'status',label:'Status',options:['All','Open','Triaged','Assigned','In Progress','Reopened']},{key:'category',label:'Category',options:['All','pothole/road','garbage/waste','drainage/sewage']},{key:'ward',label:'Ward',options:['All','Ward 11','Ward 12','Ward 14','Ward 15']}]} onFilterChange={(key,value)=>setFilters(old=>({...old,[key]:value}))}/></div><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><label className="flex max-w-sm items-center gap-2 border-2 border-[#2A3320] bg-white px-3 py-2"><Search size={14}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search title or issue ID" className="w-full bg-transparent text-xs outline-none"/></label><div className="flex flex-wrap gap-2">{['Newest','Oldest','Most supporters','SLA deadline'].map(name=><button key={name} onClick={()=>setSort(name)} className={`border-2 border-[#2A3320] px-2.5 py-2 text-[9px] font-black uppercase tracking-wider ${sort===name?'bg-[#4F5B2A] text-white shadow-[3px_3px_0px_0px_#2A3320]':'bg-white'}`}>{name}</button>)}</div></div></div>
-    <div className="hidden overflow-x-auto border-4 border-[#2A3320] bg-[#FDFBF7] md:block"><table className="data-table"><thead><tr>{['ID','Issue','Category','Ward','Age','Support','Priority','Status','SLA'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{data.map(issue=><tr key={issue.id} onClick={()=>navigate(`/officer/issue/${issue.id}`)} className={`cursor-pointer ${issue.slaBreach?'bg-[#B8892D]/10':''}`}><td className="font-black">{issue.id}</td><td><span className="font-black">{issue.title}</span>{issue.id==='ND-104'&&<p className="mt-1 text-[9px] font-black uppercase text-[#B8892D]">⚠ Possible duplicate</p>}</td><td><span className="flex items-center gap-2"><CategoryIcon category={issue.category} size={14}/>{issue.category}</span></td><td>{issue.ward.replace('Ward ','W-')}</td><td>{issue.age}</td><td className="font-black">{issue.supporters}</td><td><span className={issue.priority===1?'font-black text-[#8B4513]':'font-bold'}>{'●'.repeat(Math.max(1,5-issue.priority))} {['Critical','High','Medium','Low'][issue.priority-1]}</span></td><td><StatusBadge status={issue.status}/></td><td>{issue.slaBreach?<span className="font-black text-[#8B4513]">{issue.ageInDays-issue.slaDeadlineDays}d overdue</span>:'On track'}</td></tr>)}</tbody></table></div>
-    <div className="divide-y-2 divide-[#E8E0D0] border-4 border-[#2A3320] bg-[#FDFBF7] md:hidden">{data.map(issue=><IssueCard key={issue.id} issue={issue} variant="compact" onClick={()=>navigate(`/officer/issue/${issue.id}`)}/>)}</div>
-    </div>;
+export function OfficerOverview() {
+  const wards = [{ ward: 'Ward 11', open: 11 }, { ward: 'Ward 12', open: 17 }, { ward: 'Ward 14', open: 8 }, { ward: 'Ward 15', open: 12 }];
+  const cats = [{ name: 'Roads', value: 35 }, { name: 'Waste', value: 25 }, { name: 'Electrical', value: 20 }, { name: 'Other', value: 20 }];
+  const latest = [...statusEvents].sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, 5);
+
+  const [cascadeAlerts, setCascadeAlerts] = useState<CascadeAlert[]>([]);
+  const [detecting, setDetecting] = useState(false);
+
+  const loadCascades = () => {
+    cascadeApi.getAlerts()
+      .then((res) => setCascadeAlerts(res || []))
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    loadCascades();
+  }, []);
+
+  const handleTriggerDetect = async () => {
+    setDetecting(true);
+    try {
+      await cascadeApi.triggerDetection();
+      toast.success('DBSCAN cascade diagnostics completed');
+      loadCascades();
+    } catch (err: any) {
+      toast.error('Diagnostics failed: ' + err.message);
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  const handleAckCascade = async (id: string) => {
+    try {
+      await cascadeApi.acknowledge(id);
+      toast.success('Cascade alert acknowledged');
+      setCascadeAlerts((prev) => prev.filter((c) => c.id !== id));
+    } catch (err: any) {
+      toast.error('Failed to acknowledge: ' + err.message);
+    }
+  };
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Officer workspace · Ward 11 & 12"
+        title="Good morning, Priya."
+        description="Here’s what needs attention across your wards."
+        action={
+          <div className="flex gap-2">
+            <button
+              onClick={handleTriggerDetect}
+              disabled={detecting}
+              className="border-2 border-[#2A3320] bg-[#4F5B2A] px-3 py-2 text-[9px] font-black uppercase tracking-wider text-white disabled:opacity-60"
+            >
+              {detecting ? 'Scanning...' : 'Run Cascade Scan'}
+            </button>
+            <span className="border-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-wider">
+              Thu · 25 Sep 2026
+            </span>
+          </div>
+        }
+      />
+      <div className="mb-8 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <MetricCard value="12" label="Open queue" sublabel="+3 since yesterday" icon={ClipboardList} accentColor="olive" />
+        <MetricCard value="5" label="In progress" sublabel="Across Ward 11 & 12" icon={Clock3} accentColor="gold" />
+        <MetricCard value="3" label="Claimed resolved" sublabel="Awaiting verification" icon={FileCheck2} accentColor="sand" />
+        <MetricCard value={String(cascadeAlerts.length)} label="Cascade zones" sublabel="N4 cross-category" icon={AlertTriangle} accentColor="olive" />
+      </div>
+
+      {/* Novelty Feature N4: Cross-Category Cascade Alerts */}
+      {cascadeAlerts.length > 0 && (
+        <section className="mb-8 border-4 border-[#2A3320] bg-[#B8892D]/15 p-5 md:p-6 shadow-[5px_5px_0px_0px_#2A3320]">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={20} className="text-[#8B4513]" />
+              <h2 className="display-title text-xl">Cross-Category Cascade Alerts (N4)</h2>
+            </div>
+            <span className="border-2 border-[#2A3320] bg-[#FDFBF7] px-2.5 py-1 text-[9px] font-black uppercase tracking-wider">
+              {cascadeAlerts.length} Active
+            </span>
+          </div>
+          <p className="mb-4 text-xs text-[#2A3320]/75">
+            DBSCAN spatial clustering (500m radius, &gt;= 3 categories) detected the following potential infrastructure root cause failures:
+          </p>
+          <div className="space-y-4">
+            {cascadeAlerts.map((cascade) => (
+              <div key={cascade.id} className="border-2 border-[#2A3320] bg-[#FDFBF7] p-4">
+                <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-[#B8892D]">
+                        Confidence: {cascade.confidence.toUpperCase()}
+                      </span>
+                      <span className="border border-[#2A3320] bg-[#D8C9A8]/40 px-1.5 py-0.5 text-[8px] font-bold">
+                        {cascade.wardId || 'Pune'} · Radius: {cascade.radiusMeters}m
+                      </span>
+                    </div>
+                    <h3 className="display-title mt-1.5 text-base">{cascade.suggestedRootCause}</h3>
+                    <p className="mt-1 text-xs text-[#2A3320]/70">
+                      {cascade.issueIds.length} connected issues across categories:
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {cascade.categories.map((c) => (
+                        <span key={c} className="border border-[#2A3320] bg-white px-2 py-0.5 text-[9px] font-bold">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleAckCascade(cascade.id)}
+                    className="shrink-0 border-2 border-[#2A3320] bg-[#4F5B2A] px-3 py-1.5 text-[9px] font-black uppercase tracking-wider text-white hover:bg-[#3D4720]"
+                  >
+                    Acknowledge
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+      <div className="mb-8 grid gap-6 xl:grid-cols-2">
+        <Panel className="chart-panel border-4">
+          <div className="mb-5 flex items-start justify-between">
+            <div><p className="eyebrow">Operational load</p><h2 className="display-title mt-1 text-lg">Ward workload</h2></div>
+            <BarChart3 size={19} />
+          </div>
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={wards} margin={{ top: 6, right: 12, left: -18, bottom: 2 }}>
+              <CartesianGrid stroke="#E8E0D0" strokeDasharray="4 4" vertical={false} />
+              <XAxis dataKey="ward" tick={{ fill: '#2A3320', fontWeight: 700, fontSize: 10 }} axisLine={{ stroke: '#2A3320' }} tickLine={false} />
+              <YAxis tick={{ fill: '#2A3320', fontWeight: 700, fontSize: 9 }} axisLine={false} tickLine={false} />
+              <Tooltip {...smallTip} />
+              <Bar dataKey="open" name="Open issues" fill="#4F5B2A" radius={0} barSize={32} isAnimationActive={false} />
+            </BarChart>
+          </ResponsiveContainer>
+          <p className="mt-2 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/50">Open issues · synthetic records</p>
+        </Panel>
+        <Panel className="chart-panel border-4">
+          <div className="mb-3"><p className="eyebrow">Incoming reports</p><h2 className="display-title mt-1 text-lg">Category breakdown</h2></div>
+          <div className="grid items-center gap-2 sm:grid-cols-[1fr_1fr]">
+            <ResponsiveContainer width="100%" height={230}>
+              <PieChart>
+                <Pie data={cats} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={82} innerRadius={0} labelLine={false} label={({ percent }) => `${Math.round((percent || 0) * 100)}%`} stroke="#2A3320" strokeWidth={2} isAnimationActive={false}>
+                  {cats.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                </Pie>
+                <Tooltip {...smallTip} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="space-y-3">
+              {cats.map((item, index) => (
+                <div key={item.name} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
+                  <i className="h-3 w-3 border border-[#2A3320]" style={{ backgroundColor: COLORS[index] }} />{item.name}
+                  <span className="ml-auto">{item.value}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+      </div>
+      <section className="mb-8 border-4 border-[#B8892D] bg-[#B8892D]/10 p-5 md:p-6">
+        <div className="mb-3 flex items-center gap-2"><AlertTriangle size={18} /><h2 className="display-title text-lg">Priority alerts</h2></div>
+        {[
+          ['2 issues approaching SLA deadline', 'Pothole near market — 18 supporters, still open after 3 days'],
+          ['Reopened issue needs re-attention', 'Loose paving outside Pune station — community reported the repair did not hold'],
+          ['Highest priority in queue', 'Uncovered manhole at Erandwane — safety hazard reported today'],
+        ].map(([title, desc]) => (
+          <div key={title} className="border-t-2 border-[#B8892D]/30 py-3">
+            <p className="text-xs font-black">! {title}</p>
+            <p className="mt-1 text-xs text-[#2A3320]/75">{desc}</p>
+          </div>
+        ))}
+      </section>
+      <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
+        <section>
+          <div className="mb-3 flex items-end justify-between border-b-4 border-[#2A3320] pb-3">
+            <div><p className="eyebrow">Latest changes</p><h2 className="display-title mt-1 text-lg">Recent activity</h2></div>
+            <a href="/officer/queue" className="text-[9px] font-black uppercase tracking-wider text-[#4F5B2A] underline">Full queue →</a>
+          </div>
+          <Panel className="border-4"><ActivityTimeline events={latest} /></Panel>
+        </section>
+        <aside className="grid grid-cols-2 gap-3 lg:w-64 lg:grid-cols-1">
+          <a href="/officer/queue"><Button className="w-full">View full queue →</Button></a>
+          <a href="/transparency"><Button variant="outline" className="w-full">Public map ↗</Button></a>
+          <div className="border-2 border-[#2A3320] bg-[#D8C9A8]/40 p-4">
+            <p className="eyebrow">Ward coverage</p>
+            <p className="display-title mt-2 text-2xl">11 + 12</p>
+            <p className="mt-1 text-[10px] text-[#2A3320]/60">2 service areas</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
 }
 
-export function OfficerIssueDetail(){
-  const {id='ND-104'}=useParams();const navigate=useNavigate();const base=seedIssues.find(item=>item.id===id)||seedIssues[0];const [status,setStatus]=useState<IssueStatus>(base.status);const [reason,setReason]=useState('');const [assigned,setAssigned]=useState(base.assignedOfficer??'Unassigned');
+export function TriageQueue() {
+  const navigate = useNavigate();
+  const [filters, setFilters] = useState({ status: 'All', category: 'All', ward: 'All' });
+  const [sort, setSort] = useState('Newest');
+  const [query, setQuery] = useState('');
+  const [apiIssues, setApiIssues] = useState<ApiIssue[]>([]);
+
+  useEffect(() => {
+    issuesApi.list({ limit: 100 })
+      .then((r) => setApiIssues(r.items || []))
+      .catch(() => {});
+  }, []);
+
+  const source = apiIssues.length > 0 ? apiIssues : seedIssues;
+
+  const data = useMemo(() => {
+    const filtered = (source as any[]).filter((issue) => {
+      const matchesStatus = filters.status === 'All' || issue.status === filters.status;
+      const matchesCategory = filters.category === 'All' || issue.category === filters.category;
+      const wardStr = getWardLabel(issue);
+      const matchesWard =
+        filters.ward === 'All' ||
+        wardStr.toLowerCase().includes(filters.ward.toLowerCase()) ||
+        (issue.wardId && issue.wardId.toLowerCase().includes(filters.ward.toLowerCase().replace('ward ', 'ward-')));
+      const matchesQuery =
+        (issue.title || '').toLowerCase().includes(query.toLowerCase()) ||
+        ((issue.publicRef || issue.id || '').toLowerCase().includes(query.toLowerCase()));
+      return matchesStatus && matchesCategory && matchesWard && matchesQuery;
+    });
+
+    return filtered.sort((a: any, b: any) => {
+      if (sort === 'Oldest') return (b.ageInDays ?? 0) - (a.ageInDays ?? 0);
+      if (sort === 'Most supporters') {
+        const supA = a.supporters ?? a.supporterCount ?? 0;
+        const supB = b.supporters ?? b.supporterCount ?? 0;
+        return supB - supA;
+      }
+      return (b.createdAt || '').localeCompare(a.createdAt || '');
+    });
+  }, [filters, sort, query, source]);
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow="Officer workspace"
+        title="Triage queue"
+        description="Filter, prioritise, and route incoming civic issues."
+        action={<span className="border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[10px] font-black uppercase tracking-wider">{data.length} issues</span>}
+      />
+      <div className="mb-5 flex flex-col gap-4 border-2 border-[#2A3320] bg-[#FDFBF7] p-4">
+        <div className="flex flex-wrap gap-2">
+          <FilterBar
+            filters={[
+              { key: 'status', label: 'Status', options: ['All', 'Open', 'Triaged', 'Assigned', 'In Progress', 'Reopened'] },
+              { key: 'category', label: 'Category', options: ['All', 'pothole/road', 'garbage/waste', 'drainage/sewage', 'water supply', 'streetlight/electrical', 'stray animals', 'encroachment'] },
+              { key: 'ward', label: 'Ward', options: ['All', 'Ward 11', 'Ward 12', 'Ward 14', 'Ward 15'] },
+            ]}
+            onFilterChange={(key, value) => setFilters((old) => ({ ...old, [key]: value }))}
+          />
+        </div>
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <label className="flex max-w-sm items-center gap-2 border-2 border-[#2A3320] bg-white px-3 py-2">
+            <Search size={14} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search title or issue ID" className="w-full bg-transparent text-xs outline-none" />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {['Newest', 'Oldest', 'Most supporters'].map((name) => (
+              <button
+                key={name}
+                onClick={() => setSort(name)}
+                className={`border-2 border-[#2A3320] px-2.5 py-2 text-[9px] font-black uppercase tracking-wider ${
+                  sort === name ? 'bg-[#4F5B2A] text-white shadow-[3px_3px_0px_0px_#2A3320]' : 'bg-white'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="hidden overflow-x-auto border-4 border-[#2A3320] bg-[#FDFBF7] md:block">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {['ID', 'Issue', 'Category', 'Ward', 'Age', 'Support', 'Priority', 'Status', 'SLA'].map((h) => (
+                <th key={h}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((issue: any) => {
+              const displayId = issue.publicRef || issue.id;
+              const displayWard = getWardLabel(issue).replace('Ward ', 'W-').replace('ward-', 'W-');
+              const supporters = issue.supporters ?? issue.supporterCount ?? 0;
+              const priority = issue.priority || 3;
+              const priorityLabel = ['Critical', 'High', 'Medium', 'Low'][priority - 1] || 'Medium';
+              const ageText = issue.age || (issue.ageInDays ? `${issue.ageInDays}d ago` : 'Today');
+
+              return (
+                <tr
+                  key={issue.id}
+                  onClick={() => navigate(`/officer/issue/${displayId}`)}
+                  className={`cursor-pointer ${issue.slaBreach ? 'bg-[#B8892D]/10' : ''}`}
+                >
+                  <td className="font-black">{displayId}</td>
+                  <td>
+                    <span className="font-black">{issue.title}</span>
+                    {(displayId === 'ND-104' || issue.id === 'ND-104') && (
+                      <p className="mt-1 text-[9px] font-black uppercase text-[#B8892D]">! Possible duplicate</p>
+                    )}
+                  </td>
+                  <td>
+                    <span className="flex items-center gap-2">
+                      <CategoryIcon category={issue.category} size={14} />
+                      {issue.category}
+                    </span>
+                  </td>
+                  <td>{displayWard}</td>
+                  <td>{ageText}</td>
+                  <td className="font-black">{supporters}</td>
+                  <td>
+                    <span className={priority === 1 ? 'font-black text-[#8B4513]' : 'font-bold'}>
+                      {'●'.repeat(Math.max(1, 5 - priority))} {priorityLabel}
+                    </span>
+                  </td>
+                  <td><StatusBadge status={issue.status} /></td>
+                  <td>
+                    {issue.slaBreach ? (
+                      <span className="font-black text-[#8B4513]">
+                        {Math.max(1, (issue.ageInDays ?? 1) - (issue.slaDeadlineDays ?? 3))}d overdue
+                      </span>
+                    ) : (
+                      'On track'
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="divide-y-2 divide-[#E8E0D0] border-4 border-[#2A3320] bg-[#FDFBF7] md:hidden">
+        {data.map((issue: any) => (
+          <IssueCard
+            key={issue.id}
+            issue={issue}
+            variant="compact"
+            onClick={() => navigate(`/officer/issue/${issue.publicRef || issue.id}`)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function OfficerIssueDetail() {
+  const { id = 'ND-104' } = useParams();
+  const navigate = useNavigate();
+  const [apiIssue, setApiIssue] = useState<ApiIssue | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    issuesApi.get(id)
+      .then((res) => { if (res) setApiIssue(res); })
+      .catch((err) => { console.error('Failed to fetch officer issue:', err); })
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const matchedSeed = seedIssues.find((item) => item.id === id || (item as any).publicRef === id);
+  const base: any = apiIssue || matchedSeed || seedIssues[0];
+
+  const [status, setStatus] = useState<IssueStatus>(base.status);
+  const [reason, setReason] = useState('');
+  const [assigned, setAssigned] = useState(base.assignedOfficer ?? 'Unassigned');
   const [flags, setFlags] = useState<AdversarialFlag[]>([]);
-  useEffect(() => { adversarialApi.getFlags(base.id||base.publicRef).then(setFlags).catch(()=>{}); }, [base.id, base.publicRef]);
-  const activeFlags = flags.filter(f => !f.resolvedAt);
-  const similar=seedIssues.filter(issue=>issue.id!==base.id&&issue.category===base.category).slice(0,2);const issue={...base,status,assignedOfficer:assigned};
-  const allEvents=statusEvents.filter(event=>event.issueId===base.id);
-  const updateStatus=async()=>{try{await issuesApi.updateStatus(base.id||base.publicRef,status,reason);toast.success(`Status updated to ${status}.`);setReason('');}catch(e:any){toast.error(e.message||'Failed to update status');}};
-  const dismissFlag = async(flagId: string) => { try { await adversarialApi.resolveFlag(flagId, 'dismissed'); setFlags(old => old.map(f => f.id === flagId ? { ...f, resolvedAt: new Date().toISOString() } : f)); toast.success('Flag dismissed'); } catch(e:any) { toast.error('Failed to dismiss'); } };
-  return <div><button onClick={()=>navigate('/officer/queue')} className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] hover:underline"><ArrowLeft size={14}/>Back to triage queue</button><div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]"><div className="space-y-6"><div className="border-b-4 border-[#2A3320] pb-5"><div className="mb-3 flex flex-wrap items-center gap-3"><p className="eyebrow">{base.id} · {base.ward}</p><StatusBadge status={status}/></div><h1 className="display-title text-2xl md:text-3xl">{base.title}</h1><p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#2A3320]/60"><CategoryIcon category={base.category} size={15}/>{base.category}<span>·</span>{base.department}<span>·</span>{base.age}<span>·</span>{base.supporters} supporters</p></div><section><p className="eyebrow mb-3">Issue description</p><Panel className="border-4"><p className="text-sm leading-relaxed">{base.description}</p></Panel></section><section><p className="eyebrow mb-3">Evidence & location</p><div className="grid gap-4 md:grid-cols-2"><Panel className="flex min-h-52 flex-col items-center justify-center border-4 bg-[#D8C9A8]/40"><CameraGlyph/><p className="mt-4 text-[9px] font-black uppercase tracking-wider">Citizen photo · Private original</p></Panel><MapView issues={[base]} selectedId={base.id} height="210px"/></div></section><section><p className="eyebrow mb-3">Model suggestions · M1 v0.3</p><Panel className="border-4 border-[#B8892D] bg-[#B8892D]/10"><div className="grid gap-3 sm:grid-cols-3"><div><p className="eyebrow">Category</p><p className="mt-1 text-sm font-black">{base.category} ✓</p></div><div><p className="eyebrow">Department</p><p className="mt-1 text-sm font-black">{base.department} ✓</p></div><div><p className="eyebrow">Urgency</p><p className="mt-1 text-sm font-black">Tier {base.priority} · {['Critical','High','Medium','Low'][base.priority-1]} ✓</p></div></div><p className="mt-4 border-t-2 border-[#B8892D]/30 pt-3 text-xs"><b>Confidence:</b> {Math.round(base.aiConfidence*100)}% · review recommendations, not decisions.</p></Panel></section>
-  <section><p className="eyebrow mb-3">Adversarial Checks</p>
-  {activeFlags.length === 0 ? <div className="border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-xs font-bold text-[#4F5B2A]">✓ No adversarial flags detected</div> : <div className="space-y-3">{activeFlags.map(f => <div key={f.id} className={`border-4 bg-white p-4 ${f.severity === 'high' ? 'border-[#B22222] animate-pulse' : f.severity === 'medium' ? 'border-[#C0621A]' : 'border-[#4F5B2A]'}`}><div className="flex items-start justify-between"><div className="flex items-center gap-2"><AlertTriangle size={16} className={f.severity === 'high' ? 'text-[#B22222]' : 'text-[#C0621A]'}/><span className="text-[10px] font-black uppercase tracking-wider">{f.rule.replace('_', ' ')}</span></div><span className="bg-[#2A3320] px-2 py-1 text-[9px] font-bold uppercase text-white">{f.severity}</span></div><p className="mt-2 text-xs text-[#2A3320]/80">{JSON.stringify(f.details)}</p><Button variant="outline" className="mt-3 text-[9px]" onClick={() => dismissFlag(f.id)}>Dismiss flag</Button></div>)}</div>}
-  </section><section><p className="eyebrow mb-3">Why prioritised</p><div className="border-4 border-[#2A3320] bg-[#D8C9A8]/30 p-5"><div className="flex items-start gap-3"><AlertTriangle size={18} className="mt-0.5 shrink-0"/><p className="text-sm leading-relaxed">{base.urgencyExplanation}</p></div></div></section><section><p className="eyebrow mb-3">Full timeline</p><Panel className="border-4"><ActivityTimeline events={allEvents}/></Panel></section></div>
-    <aside><Panel className="sticky top-24 border-4"><p className="eyebrow">Officer actions</p><h2 className="display-title mt-1 text-xl">Manage issue</h2><div className="mt-5 border-t-2 border-[#E8E0D0] pt-5"><label className="eyebrow block">Assignment</label><p className="mt-2 text-xs font-bold">Current owner: {assigned}</p><Button className="mt-3 w-full" variant="outline" onClick={()=>{setAssigned('Priya Nair');toast.success('Assigned to you.');}}>Assign to me</Button><label htmlFor="department" className="mt-4 block text-[9px] font-black uppercase tracking-widest">Department</label><select id="department" className="input-block mt-2 border-2 py-2 text-xs"><option>{base.department}</option><option>Roads Department</option><option>Solid Waste Management</option><option>Drainage & Water</option><option>Electrical Department</option></select></div><div className="mt-5 border-t-2 border-[#E8E0D0] pt-5"><label className="eyebrow block">Status update</label><select value={status} onChange={event=>setStatus(event.target.value as IssueStatus)} className="input-block mt-2 border-2 py-2 text-xs">{['Triaged','Assigned','In Progress','Claimed Resolved','Verified Fixed','Reopened'].map(value=><option key={value}>{value}</option>)}</select><textarea value={reason} onChange={event=>setReason(event.target.value)} placeholder="Reason for status update" className="input-block mt-3 min-h-24 border-2 text-xs"/><Button className="mt-3 w-full" onClick={updateStatus}>Update status →</Button></div><div className="mt-5 border-t-2 border-[#E8E0D0] pt-5"><p className="eyebrow">Proof of fix</p><p className="mt-2 text-xs text-[#2A3320]/60">Attach resolution evidence for community verification.</p><a href={`/officer/issue/${base.id}/proof`} className="mt-3 block"><Button variant="gold" className="w-full">＋ Review proof flow</Button></a></div><div className="mt-5 border-t-2 border-[#E8E0D0] pt-5"><p className="eyebrow">Similar issues</p>{similar.map(item=><a key={item.id} href={`/officer/issue/${item.id}`} className="mt-3 block border-2 border-[#2A3320] bg-[#D8C9A8]/25 p-3 text-xs font-bold hover:bg-[#D8C9A8]/50">{item.title}<span className="mt-1 block text-[9px] font-black uppercase text-[#4F5B2A]">{item.id} · Candidate ↗</span></a>)}</div></Panel></aside></div></div>;
-}
-function CameraGlyph(){return <div className="flex h-16 w-20 items-center justify-center border-4 border-[#2A3320] bg-[#FDFBF7] shadow-[4px_4px_0px_0px_#2A3320]"><MapPin size={28}/></div>}
 
-export function ProofReview(){
-  const {id='ND-109'}=useParams();const issue=seedIssues.find(item=>item.id===id)||seedIssues[5];const [reviewed,setReviewed]=useState(false);
-  const flags=[['Location match','PASS'],['Time plausibility','PASS'],['Image reuse check','WARNING'],['Visual change','PASS']];
-  return <div><PageHeader eyebrow={`Issue ${issue.id}`} title="Proof of fix review" description="Review officer evidence alongside the original report and community verification signals."/><div className="mb-7 grid gap-4 md:grid-cols-2"><Panel className="border-4 !p-0"><div className="flex h-64 items-center justify-center bg-[#D8C9A8]/40"><MapPin size={45}/></div><p className="border-t-4 border-[#2A3320] bg-[#2A3320] px-4 py-3 text-[9px] font-black uppercase tracking-widest text-white">Before · Citizen report</p></Panel><Panel className="border-4 !p-0"><div className="flex h-64 items-center justify-center bg-[#D8C9A8]/70"><FileCheck2 size={45}/></div><p className="border-t-4 border-[#2A3320] bg-[#2A3320] px-4 py-3 text-[9px] font-black uppercase tracking-widest text-white">After · Officer evidence</p></Panel></div><div className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]"><section><p className="eyebrow mb-3">Resolution note</p><Panel className="mb-6 border-4 bg-[#D8C9A8]/30"><p className="text-sm leading-relaxed">{issue.title} has been attended to by the assigned department. Work completed and public verification requested.</p></Panel><p className="eyebrow mb-3">Automated evidence checks · M5 v0.2</p><Panel className="border-4 border-[#B8892D] bg-[#B8892D]/10"><h2 className="display-title text-lg">Needs review</h2>{flags.map(([label,result])=><div key={label} className="flex items-center justify-between border-b border-[#E8E0D0] py-3 last:border-0"><span className="flex items-center gap-2 text-xs font-bold">{result==='PASS'?<Check size={16} className="text-[#4F5B2A]"/>:<AlertTriangle size={16} className="text-[#B8892D]"/>}{label}</span><span className={`text-[9px] font-black uppercase tracking-widest ${result==='PASS'?'text-[#4F5B2A]':'text-[#B8892D]'}`}>{result}</span></div>)}<p className="mt-4 border-t-2 border-[#B8892D]/40 pt-3 text-xs leading-relaxed">After-image has similarity to a previously submitted photo. Manual review recommended. <b>Confidence: 0.73</b></p></Panel></section><aside><Panel className="border-4"><p className="eyebrow">Community verification</p><h2 className="display-title mt-2 text-lg">Current votes</h2><div className="mt-5 flex h-5 overflow-hidden border-2 border-[#2A3320]"><div className="bg-[#4F5B2A]" style={{width:'75%'}}/><div className="bg-[#B8892D]" style={{width:'25%'}}/></div><div className="mt-3 flex justify-between text-[10px] font-black uppercase"><span>✓ 3 fixed</span><span>✕ 1 not fixed</span></div><p className="mt-4 text-xs leading-relaxed text-[#2A3320]/65">Reopen threshold: 2 nearby “not fixed” votes.</p><p className="mt-5 border-t-2 border-[#E8E0D0] pt-4 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/60">Issue: {issue.title}</p></Panel><div className="mt-5 space-y-3"><Button className="w-full" onClick={()=>{setReviewed(true);toast.success('Proof accepted in this demo.');}}>Accept claim →</Button><Button className="w-full" variant="gold" onClick={()=>{setReviewed(true);toast.info('Re-submission requested in this demo.');}}>Request re-submission</Button><a href={`/officer/issue/${issue.id}`} className="block"><Button variant="outline" className="w-full">← Back to issue</Button></a>{reviewed&&<p className="border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-center text-[9px] font-black uppercase tracking-widest">Review action recorded</p>}</div></aside></div></div>;
+  useEffect(() => {
+    if (base) {
+      setStatus(base.status);
+      setAssigned(base.assignedOfficer ?? 'Unassigned');
+    }
+  }, [base.id, base.status]);
+
+  useEffect(() => {
+    const targetId = base.publicRef || base.id;
+    if (targetId) {
+      adversarialApi.getFlags(targetId).then(setFlags).catch(() => {});
+    }
+  }, [base.id, base.publicRef]);
+
+  const activeFlags = flags.filter((f) => !f.resolvedAt);
+  const similar = seedIssues.filter((item) => item.id !== base.id && item.category === base.category).slice(0, 2);
+
+  const allEvents = (apiIssue as any)?.events?.length
+    ? (apiIssue as any).events
+    : statusEvents.filter((event) => event.issueId === base.id || event.issueId === base.publicRef);
+
+  const updateStatus = async () => {
+    try {
+      const targetId = base.publicRef || base.id;
+      await issuesApi.updateStatus(targetId, status, reason);
+      toast.success(`Status updated to ${status}.`);
+      setReason('');
+      const updated = await issuesApi.get(targetId);
+      if (updated) setApiIssue(updated);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to update status');
+    }
+  };
+
+  const dismissFlag = async (flagId: string) => {
+    try {
+      await adversarialApi.resolveFlag(flagId, 'dismissed');
+      setFlags((old) => old.map((f) => (f.id === flagId ? { ...f, resolvedAt: new Date().toISOString() } : f)));
+      toast.success('Flag dismissed');
+    } catch (e: any) {
+      toast.error('Failed to dismiss');
+    }
+  };
+
+  const displayId = base.publicRef || base.id;
+  const wardDisplay = getWardLabel(base);
+  const supportersCount = base.supporters ?? base.supporterCount ?? 0;
+  const beforeMedia = (apiIssue as any)?.media?.find((m: any) => m.type === 'before');
+
+  if (loading && !apiIssue && !matchedSeed) {
+    return (
+      <div className="p-8 text-center">
+        <span className="border-4 border-[#2A3320] bg-[#D8C9A8] px-5 py-4 text-[10px] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#2A3320]">
+          Loading issue...
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        onClick={() => navigate('/officer/queue')}
+        className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] hover:underline"
+      >
+        <ArrowLeft size={14} />Back to triage queue
+      </button>
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
+        <div className="space-y-6">
+          <div className="border-b-4 border-[#2A3320] pb-5">
+            <div className="mb-3 flex flex-wrap items-center gap-3">
+              <p className="eyebrow">{displayId} · {wardDisplay}</p>
+              <StatusBadge status={status} />
+            </div>
+            <h1 className="display-title text-2xl md:text-3xl">{base.title}</h1>
+            <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#2A3320]/60">
+              <CategoryIcon category={base.category} size={15} />
+              {base.category}
+              <span>·</span>
+              {base.department || 'Civic Works'}
+              <span>·</span>
+              {base.age || 'Recently'}
+              <span>·</span>
+              {supportersCount} supporters
+            </p>
+          </div>
+          <section>
+            <p className="eyebrow mb-3">Issue description</p>
+            <Panel className="border-4">
+              <p className="text-sm leading-relaxed">{base.description || 'No description provided.'}</p>
+            </Panel>
+          </section>
+          <section>
+            <p className="eyebrow mb-3">Evidence & location</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Panel className="flex min-h-52 flex-col items-center justify-center border-4 bg-[#D8C9A8]/40">
+                {(beforeMedia?.publicPath || beforeMedia?.privatePath) ? (
+                  <img src={beforeMedia.publicPath || beforeMedia.privatePath} alt="Issue photo" className="h-44 w-full object-cover grayscale transition-all hover:grayscale-0" />
+                ) : (
+                  <>
+                    <CameraGlyph />
+                    <p className="mt-4 text-[9px] font-black uppercase tracking-wider">Citizen photo · Private original</p>
+                  </>
+                )}
+              </Panel>
+              <MapView issues={[base]} selectedId={base.id} height="210px" />
+            </div>
+          </section>
+          <section>
+            <p className="eyebrow mb-3">Model suggestions · M1 v0.3</p>
+            <Panel className="border-4 border-[#B8892D] bg-[#B8892D]/10">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div><p className="eyebrow">Category</p><p className="mt-1 text-sm font-black">{base.category} [OK]</p></div>
+                <div><p className="eyebrow">Department</p><p className="mt-1 text-sm font-black">{base.department || 'Civic Works'} [OK]</p></div>
+                <div><p className="eyebrow">Urgency</p><p className="mt-1 text-sm font-black">Tier {base.priority || 3} · {['Critical', 'High', 'Medium', 'Low'][(base.priority || 3) - 1]} [OK]</p></div>
+              </div>
+              <p className="mt-4 border-t-2 border-[#B8892D]/30 pt-3 text-xs">
+                <b>Confidence:</b> {Math.round((base.aiConfidence || 0.85) * 100)}% · review recommendations, not decisions.
+              </p>
+            </Panel>
+          </section>
+          <section>
+            <p className="eyebrow mb-3">Adversarial Checks</p>
+            {activeFlags.length === 0 ? (
+              <div className="border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-xs font-bold text-[#4F5B2A]">
+                No adversarial flags detected
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {activeFlags.map((f) => (
+                  <div key={f.id} className={`border-4 bg-white p-4 ${f.severity === 'high' ? 'border-[#B22222] animate-pulse' : f.severity === 'medium' ? 'border-[#C0621A]' : 'border-[#4F5B2A]'}`}>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle size={16} className={f.severity === 'high' ? 'text-[#B22222]' : 'text-[#C0621A]'} />
+                        <span className="text-[10px] font-black uppercase tracking-wider">{f.rule.replace('_', ' ')}</span>
+                      </div>
+                      <span className="bg-[#2A3320] px-2 py-1 text-[9px] font-bold uppercase text-white">{f.severity}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-[#2A3320]/80">{JSON.stringify(f.details)}</p>
+                    <Button variant="outline" className="mt-3 text-[9px]" onClick={() => dismissFlag(f.id)}>Dismiss flag</Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+          <section>
+            <p className="eyebrow mb-3">Why prioritised</p>
+            <div className="border-4 border-[#2A3320] bg-[#D8C9A8]/30 p-5">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+                <p className="text-sm leading-relaxed">{base.urgencyExplanation || 'Prioritised based on community support count and category SLA thresholds.'}</p>
+              </div>
+            </div>
+          </section>
+          <section>
+            <p className="eyebrow mb-3">Full timeline</p>
+            <Panel className="border-4"><ActivityTimeline events={allEvents} /></Panel>
+          </section>
+        </div>
+        <aside>
+          <Panel className="sticky top-24 border-4">
+            <p className="eyebrow">Officer actions</p>
+            <h2 className="display-title mt-1 text-xl">Manage issue</h2>
+            <div className="mt-5 border-t-2 border-[#E8E0D0] pt-5">
+              <label className="eyebrow block">Assignment</label>
+              <p className="mt-2 text-xs font-bold">Current owner: {assigned}</p>
+              <Button className="mt-3 w-full" variant="outline" onClick={() => { setAssigned('Priya Nair'); toast.success('Assigned to you.'); }}>Assign to me</Button>
+              <label htmlFor="department" className="mt-4 block text-[9px] font-black uppercase tracking-widest">Department</label>
+              <select id="department" className="input-block mt-2 border-2 py-2 text-xs">
+                <option>{base.department || 'Roads Department'}</option>
+                <option>Roads Department</option>
+                <option>Solid Waste Management</option>
+                <option>Drainage & Water</option>
+                <option>Electrical Department</option>
+              </select>
+            </div>
+            <div className="mt-5 border-t-2 border-[#E8E0D0] pt-5">
+              <label className="eyebrow block">Status update</label>
+              <select value={status} onChange={(event) => setStatus(event.target.value as IssueStatus)} className="input-block mt-2 border-2 py-2 text-xs">
+                {['Triaged', 'Assigned', 'In Progress', 'Claimed Resolved', 'Verified Fixed', 'Reopened'].map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </select>
+              <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason for status update" className="input-block mt-3 min-h-24 border-2 text-xs" />
+              <Button className="mt-3 w-full" onClick={updateStatus}>Update status →</Button>
+            </div>
+            <div className="mt-5 border-t-2 border-[#E8E0D0] pt-5">
+              <p className="eyebrow">Proof of fix</p>
+              <p className="mt-2 text-xs text-[#2A3320]/60">Attach resolution evidence for community verification.</p>
+              <a href={`/officer/issue/${displayId}/proof`} className="mt-3 block">
+                <Button variant="gold" className="w-full">＋ Review proof flow</Button>
+              </a>
+            </div>
+            <div className="mt-5 border-t-2 border-[#E8E0D0] pt-5">
+              <p className="eyebrow">Similar issues</p>
+              {similar.map((item) => (
+                <a key={item.id} href={`/officer/issue/${(item as any).publicRef || item.id}`} className="mt-3 block border-2 border-[#2A3320] bg-[#D8C9A8]/25 p-3 text-xs font-bold hover:bg-[#D8C9A8]/50">
+                  {item.title}
+                  <span className="mt-1 block text-[9px] font-black uppercase text-[#4F5B2A]">{(item as any).publicRef || item.id} · Candidate ↗</span>
+                </a>
+              ))}
+            </div>
+          </Panel>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function CameraGlyph() {
+  return (
+    <div className="flex h-16 w-20 items-center justify-center border-4 border-[#2A3320] bg-[#FDFBF7] shadow-[4px_4px_0px_0px_#2A3320]">
+      <MapPin size={28} />
+    </div>
+  );
+}
+
+export function ProofReview() {
+  const { id = 'ND-109' } = useParams();
+  const [apiIssue, setApiIssue] = useState<ApiIssue | null>(null);
+
+  useEffect(() => {
+    if (id) {
+      issuesApi.get(id).then(setApiIssue).catch(() => {});
+    }
+  }, [id]);
+
+  const matched = seedIssues.find((item) => item.id === id || (item as any).publicRef === id);
+  const issue: any = apiIssue || matched || seedIssues[5];
+  const [reviewed, setReviewed] = useState(false);
+  const flags = [['Location match', 'PASS'], ['Time plausibility', 'PASS'], ['Image reuse check', 'WARNING'], ['Visual change', 'PASS']];
+
+  return (
+    <div>
+      <PageHeader
+        eyebrow={`Issue ${issue.publicRef || issue.id}`}
+        title="Proof of fix review"
+        description="Review officer evidence alongside the original report and community verification signals."
+      />
+      <div className="mb-7 grid gap-4 md:grid-cols-2">
+        <Panel className="border-4 !p-0">
+          <div className="flex h-64 items-center justify-center bg-[#D8C9A8]/40"><MapPin size={45} /></div>
+          <p className="border-t-4 border-[#2A3320] bg-[#2A3320] px-4 py-3 text-[9px] font-black uppercase tracking-widest text-white">Before · Citizen report</p>
+        </Panel>
+        <Panel className="border-4 !p-0">
+          <div className="flex h-64 items-center justify-center bg-[#D8C9A8]/70"><FileCheck2 size={45} /></div>
+          <p className="border-t-4 border-[#2A3320] bg-[#2A3320] px-4 py-3 text-[9px] font-black uppercase tracking-widest text-white">After · Officer evidence</p>
+        </Panel>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_.85fr]">
+        <section>
+          <p className="eyebrow mb-3">Resolution note</p>
+          <Panel className="mb-6 border-4 bg-[#D8C9A8]/30">
+            <p className="text-sm leading-relaxed">{issue.title} has been attended to by the assigned department. Work completed and public verification requested.</p>
+          </Panel>
+          <p className="eyebrow mb-3">Automated evidence checks · M5 v0.2</p>
+          <Panel className="border-4 border-[#B8892D] bg-[#B8892D]/10">
+            <h2 className="display-title text-lg">Needs review</h2>
+            {flags.map(([label, result]) => (
+              <div key={label} className="flex items-center justify-between border-b border-[#E8E0D0] py-3 last:border-0">
+                <span className="flex items-center gap-2 text-xs font-bold">
+                  {result === 'PASS' ? <Check size={16} className="text-[#4F5B2A]" /> : <AlertTriangle size={16} className="text-[#B8892D]" />}
+                  {label}
+                </span>
+                <span className={`text-[9px] font-black uppercase tracking-widest ${result === 'PASS' ? 'text-[#4F5B2A]' : 'text-[#B8892D]'}`}>
+                  {result}
+                </span>
+              </div>
+            ))}
+            <p className="mt-4 border-t-2 border-[#B8892D]/40 pt-3 text-xs leading-relaxed">
+              After-image has similarity to a previously submitted photo. Manual review recommended. <b>Confidence: 0.73</b>
+            </p>
+          </Panel>
+        </section>
+        <aside>
+          <Panel className="border-4">
+            <p className="eyebrow">Community verification</p>
+            <h2 className="display-title mt-2 text-lg">Current votes</h2>
+            <div className="mt-5 flex h-5 overflow-hidden border-2 border-[#2A3320]">
+              <div className="bg-[#4F5B2A]" style={{ width: '75%' }} />
+              <div className="bg-[#B8892D]" style={{ width: '25%' }} />
+            </div>
+            <div className="mt-3 flex justify-between text-[10px] font-black uppercase">
+              <span>✓ 3 fixed</span><span>✕ 1 not fixed</span>
+            </div>
+            <p className="mt-4 text-xs leading-relaxed text-[#2A3320]/65">Reopen threshold: 2 nearby “not fixed” votes.</p>
+            <p className="mt-5 border-t-2 border-[#E8E0D0] pt-4 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/60">Issue: {issue.title}</p>
+          </Panel>
+          <div className="mt-5 space-y-3">
+            <Button className="w-full" onClick={() => { setReviewed(true); toast.success('Proof accepted in this demo.'); }}>Accept claim →</Button>
+            <Button className="w-full" variant="gold" onClick={() => { setReviewed(true); toast.info('Re-submission requested in this demo.'); }}>Request re-submission</Button>
+            <a href={`/officer/issue/${issue.publicRef || issue.id}`} className="block">
+              <Button variant="outline" className="w-full">← Back to issue</Button>
+            </a>
+            {reviewed && <p className="border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-center text-[9px] font-black uppercase tracking-widest">Review action recorded</p>}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
 }

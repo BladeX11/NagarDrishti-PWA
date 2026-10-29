@@ -3,8 +3,28 @@ import { scorecardService } from '../services/scorecardService.js';
 import { db } from '../db/index.js';
 import { issues } from '../db/schema.js';
 import { inactionService } from '../services/inactionService.js';
+import { equityService } from '../services/equityService.js';
+import { cascadeService } from '../services/cascadeService.js';
 
 const router = Router();
+
+router.get('/equity', async (req, res) => {
+  try {
+    const result = await equityService.computeEquityMetrics();
+    res.json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/cascades', async (req, res) => {
+  try {
+    const alerts = await cascadeService.getActiveAlerts(req.query.wardId as string);
+    res.json({ success: true, data: alerts });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 router.get('/scorecards', async (req, res) => {
   try {

@@ -3,14 +3,20 @@ import { issueService } from '../services/issueService.js';
 import { workflowService } from '../services/workflowService.js';
 import { verificationService } from '../services/verificationService.js';
 import { adversarialService } from '../services/adversarialService.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requireRole, getDemoUser } from '../middleware/auth.js';
 import { aiQueue } from '../ai/queue.js';
 
 const router = Router();
 
 router.get('/', async (req, res) => {
   try {
-    const issues = await issueService.listIssues(req.query);
+    let currentUserId: string | undefined;
+    const role = (req.headers['x-demo-role'] as string) || req.cookies?.role;
+    if (role) {
+      const demoUser = await getDemoUser(role);
+      currentUserId = demoUser?.id;
+    }
+    const issues = await issueService.listIssues(req.query, currentUserId);
     res.json({ success: true, data: issues });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -33,7 +39,13 @@ router.post('/', requireAuth, requireRole('citizen'), async (req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
-    const issue = await issueService.getIssue(req.params.id);
+    let currentUserId: string | undefined;
+    const role = (req.headers['x-demo-role'] as string) || req.cookies?.role;
+    if (role) {
+      const demoUser = await getDemoUser(role);
+      currentUserId = demoUser?.id;
+    }
+    const issue = await issueService.getIssue(req.params.id, currentUserId);
     if (!issue) return res.status(404).json({ success: false, error: 'Not found' });
     res.json({ success: true, data: issue });
   } catch (error: any) {

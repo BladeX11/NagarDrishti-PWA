@@ -296,3 +296,195 @@
 - `nagardrishti-frontend/.gitignore`
 - `nagardrishti-frontend/package.json`
 - `MISTAKES.md`
+
+---
+
+## Session: 2026-10-01 (Vitest Mock Fix & Phase 5 Step 5.1 Ward Metadata)
+**Phase:** Phase 5 (Equity Analysis N1 + Cascade Detection N4)
+**Completed:**
+- Fixed Vitest mock chaining in `tests/adversarialService.test.ts` and `tests/inactionService.test.ts` using chainable and awaitable Proxies inside `vi.hoisted()`, achieving 104/104 green tests.
+- Completed Phase 5 Step 5.1: added ward demographic metadata columns (`ward_type`, `density_tier`, `tax_band`) to `wards` table in `server/db/schema.ts`.
+- Added `WardType`, `DensityTier`, `TaxBand`, and `WardMetadata` shared types in `shared/types.ts`.
+- Updated seed data in `server/db/seed.ts` with representative demographic data across all 4 ward types.
+- Executed `server/db/sync_ward_columns.ts` to sync PostgreSQL live schema and populate metadata on existing rows.
+- Updated `plans/05-implementation-roadmap.md` marking Step 5.1 as DONE.
+**In Progress:** Phase 5 Step 5.2 (Build equity analysis engine)
+**Blocked:** None
+**Key Decisions:**
+- Mock Proxy attaches chain methods to Promises while guarding `target !== c` to avoid self-referential call stack overflows.
+- Assigned all 4 ward types (`planned`, `mixed`, `unplanned`, `peri-urban`) across the 4 seed wards for comprehensive equity testing in Step 5.2.
+**Next Session Should:** Start Step 5.2 by creating `server/services/equityService.ts` for weekly equity bias computation.
+**Files Changed:**
+- `nagardrishti-frontend/tests/adversarialService.test.ts`
+- `nagardrishti-frontend/tests/inactionService.test.ts`
+- `nagardrishti-frontend/server/db/schema.ts`
+- `nagardrishti-frontend/server/db/seed.ts`
+- `nagardrishti-frontend/server/db/sync_ward_columns.ts`
+- `nagardrishti-frontend/shared/types.ts`
+- `plans/05-implementation-roadmap.md`
+- `MISTAKES.md`
+- `plans/progress/SESSION_LOG.md`
+
+---
+
+## Session: 2026-10-01 (Bug Fixes: Officer Triage Queue Crash & Issue Support Count)
+**Phase:** Phase 5 (Bug Fixes & System Stability)
+**Completed:**
+- Resolved crash and blank screen in Officer Triage Queue (`/officer/queue`) caused by calling `.replace()` on undefined ward fields on live API issues.
+- Fixed `OfficerIssueDetail` to dynamically query issue data and timeline via `issuesApi.get(id)` instead of hardcoded fallback to `seedIssues[0]`.
+- Fixed issue support mechanism in `CitizenPages.tsx` and `IssueCard.tsx`: wired buttons to `issuesApi.support()` with optimistic count increment, supporter status tracking, and toast notifications.
+- Resolved PostgreSQL UUID casting errors in `supportIssue`, `transitionStatus`, and `getActiveFlags` when given issue `publicRef` strings (e.g. `ND-103`).
+- Ensured 104/104 Vitest unit tests pass and `npm run check` passes with 0 TypeScript errors.
+**In Progress:** Phase 5 Step 5.2 (Build equity analysis engine)
+**Blocked:** None
+**Key Decisions:**
+- Handled both UUID and `publicRef` uniformly across `issueService` and `workflowService` to prevent DB type errors.
+- Added `getWardLabel` helper with safe dictionary fallback to ensure ward display never throws a TypeError.
+**Next Session Should:** Implement Phase 5 Step 5.2 (`server/services/equityService.ts`).
+**Files Changed:**
+- `nagardrishti-frontend/server/services/issueService.ts`
+- `nagardrishti-frontend/server/routes/issues.ts`
+- `nagardrishti-frontend/server/services/workflowService.ts`
+- `nagardrishti-frontend/server/services/adversarialService.ts`
+- `nagardrishti-frontend/server/routes/ai.ts`
+- `nagardrishti-frontend/client/src/pages/officer/OfficerPages.tsx`
+- `nagardrishti-frontend/client/src/pages/citizen/CitizenPages.tsx`
+- `nagardrishti-frontend/client/src/components/shared/IssueCard.tsx`
+- `nagardrishti-frontend/client/src/pages/transparency/PublicPages.tsx`
+- `MISTAKES.md`
+- `plans/progress/SESSION_LOG.md`
+
+---
+
+## Session: 2026-10-02 (Phase 5 Step 5.2: Equity Analysis Engine)
+**Phase:** Phase 5 (Equity Analysis N1 + Cascade Detection N4)
+**Completed:**
+- Implemented Phase 5 Step 5.2: Equity Analysis Engine in `server/services/equityService.ts`.
+- Implemented non-parametric Kruskal-Wallis H test with tie corrections and chi-square p-value survival calculation across ward types.
+- Computed median response days, median resolution days, SLA compliance rates, reopen rates, gap ratios (unplanned vs planned), and fairness alerts.
+- Exposed `GET /api/transparency/equity` in `server/routes/transparency.ts`.
+- Added shared equity response types in `shared/types.ts` and wired `transparencyApi.getEquity()` in `client/src/lib/api.ts`.
+- Added comprehensive unit tests in `tests/equityService.test.ts`.
+**In Progress:** Phase 5 Step 5.3 (Build equity dashboard UI in `PublicPages.tsx`)
+**Blocked:** None
+**Key Decisions:**
+- Pure analytical non-parametric Kruskal-Wallis test implemented in TypeScript without external Python or heavy dependency requirements.
+- Standardized gap ratio against planned ward medians with a baseline denominator to prevent division-by-zero.
+**Next Session Should:** Implement Phase 5 Step 5.3 (Equity dashboard with heatmap and gap charts in `PublicPages.tsx`).
+**Files Changed:**
+- `nagardrishti-frontend/server/services/equityService.ts`
+- `nagardrishti-frontend/server/routes/transparency.ts`
+- `nagardrishti-frontend/shared/types.ts`
+- `nagardrishti-frontend/client/src/lib/api.ts`
+- `nagardrishti-frontend/tests/equityService.test.ts`
+- `plans/05-implementation-roadmap.md`
+- `plans/progress/SESSION_LOG.md`
+
+---
+
+## Session: 2026-10-02 (Phase 5 Step 5.3: Equity Dashboard UI & Seed Disparity)
+**Phase:** Phase 5 (Equity Analysis N1 + Cascade Detection N4)
+**Completed:**
+- Implemented Phase 5 Step 5.3: Equity Dashboard in `client/src/pages/transparency/PublicPages.tsx` (`EquityDashboard`).
+- Added high-level city equity stat cards (Planned benchmark, Unplanned delay, Gap days, Disparity multiplier, Kruskal-Wallis audit).
+- Added Fairness Alert Banners highlighting categories with high/medium disparity ratios.
+- Added Gap Chart (side-by-side BarChart comparing Planned vs Unplanned response days by category).
+- Added Equity Heatmap matrix (cross-tabulation of ward type x category colored by median response days).
+- Added Category Breakdown view with Kruskal-Wallis significance indicators and per-ward-type metrics.
+- Mounted `/transparency/equity` route in `App.tsx` and added "Ward equity (N1)" tab in `PublicLayout.tsx`.
+- Enriched `server/db/seed.ts` with realistic hash-chained status events exhibiting measurable service gaps between planned and unplanned wards.
+- Marked Step 5.3 as `DONE` and checked off "Equity page shows measurable gap between ward types" in roadmap.
+**In Progress:** Phase 5 Step 5.4 (Create `cascade_alerts` table in schema and migration)
+**Blocked:** None
+**Key Decisions:**
+- Reused existing Brutalist design tokens and Recharts components matching Public transparency style.
+- Seed data generates cryptographically valid status events with distinct temporal delays by ward type.
+**Next Session Should:** Start Step 5.4 by adding the `cascade_alerts` table to `schema.ts`.
+**Files Changed:**
+- `nagardrishti-frontend/client/src/pages/transparency/PublicPages.tsx`
+- `nagardrishti-frontend/client/src/App.tsx`
+- `nagardrishti-frontend/client/src/layouts/PublicLayout.tsx`
+- `nagardrishti-frontend/server/db/seed.ts`
+- `plans/05-implementation-roadmap.md`
+- `plans/progress/SESSION_LOG.md`
+
+---
+
+## Session: 2026-10-02 (Phase 5 Steps 5.4 & 5.5: Cascade Table & DBSCAN Engine)
+**Phase:** Phase 5 (Equity Analysis N1 + Cascade Detection N4)
+**Completed:**
+- Implemented Step 5.4: Created `cascadeAlerts` table in `server/db/schema.ts` with DDL synchronization in `server/db/sync_cascade_alerts.ts`.
+- Implemented Step 5.5: Built DBSCAN cross-category cascade detection service in `server/services/cascadeService.ts`.
+- Added Haversine distance calculation, DBSCAN spatial clustering (eps=500m, minSamples=3), cross-category verification (>=3 categories), temporal burst correlation, and root cause pattern mapping.
+- Exposed `GET /api/transparency/cascades` in `server/routes/transparency.ts`.
+- Exposed `GET /api/officer/cascades`, `POST /api/officer/cascades/:id/ack`, and `POST /api/officer/cascades/detect` in `server/routes/officer.ts`.
+- Added `CascadeAlert` type in `shared/types.ts` and `cascadeApi` client in `client/src/lib/api.ts`.
+- Added unit tests in `tests/cascadeService.test.ts`.
+- Marked Steps 5.4 and 5.5 as `DONE` and checked off cascade alert condition in `plans/05-implementation-roadmap.md`.
+**In Progress:** Phase 5 Step 5.6 (Build cascade UI in `OfficerPages.tsx` and `PublicPages.tsx`)
+**Blocked:** None
+**Key Decisions:**
+- Pure TypeScript implementation of DBSCAN with pairwise spatial indexing for in-memory execution without external C++ or Python bindings.
+- Cascade pattern matrix encodes domain knowledge (e.g. underground pipe bursts, sanitation neglect, construction encroachment).
+**Next Session Should:** Implement Phase 5 Step 5.6 (Cascade UI visualizations on Officer Map and Public Dashboard).
+**Files Changed:**
+- `nagardrishti-frontend/server/db/schema.ts`
+- `nagardrishti-frontend/server/db/sync_cascade_alerts.ts`
+- `nagardrishti-frontend/server/services/cascadeService.ts`
+- `nagardrishti-frontend/server/routes/transparency.ts`
+- `nagardrishti-frontend/server/routes/officer.ts`
+- `nagardrishti-frontend/shared/types.ts`
+- `nagardrishti-frontend/client/src/lib/api.ts`
+- `nagardrishti-frontend/tests/cascadeService.test.ts`
+- `plans/05-implementation-roadmap.md`
+- `plans/progress/SESSION_LOG.md`
+
+---
+
+## Session: 2026-10-02 (Phase 5 Step 5.6: Cascade UI & Phase 5 Completion)
+**Phase:** Phase 5 (Equity Analysis N1 + Cascade Detection N4) — COMPLETED
+**Completed:**
+- Implemented Step 5.6: Built Cascade UI across Officer and Public maps and dashboards.
+- Updated `MapView.tsx` to support rendering `cascadeAlerts` with pulsing/dashed gold rings, radius coverage, tooltip previews, and comprehensive diagnostic popup details.
+- Updated `PublicMap` in `client/src/pages/transparency/PublicPages.tsx` to fetch active cascade alerts, display cascade zone counters in the map corner stats, and render an "Infrastructure Cascade Alert Zones (N4)" panel with cluster confidence and connected category pills.
+- Updated `OfficerOverview` in `client/src/pages/officer/OfficerPages.tsx` with a cascade zone counter metric, "Run Cascade Scan" trigger button, and an active cascade alert review card with instant acknowledgment functionality.
+- Marked Step 5.6 as `DONE` and Phase 5 as `[COMPLETED]` in `plans/05-implementation-roadmap.md`.
+**In Progress:** None (Phase 5 is complete). Ready for Phase 6 (TAS Scoring + AI Baselines).
+**Blocked:** None
+**Key Decisions:**
+- Reused existing map architecture in `MapView.tsx` to render multi-issue cascade zones with domain-specific diagnostic popups.
+- Connected officer scan actions to `cascadeApi.triggerDetection()` with immediate toast feedback.
+**Next Session Should:** Start Phase 6: TAS Scoring + AI Baselines (Step 6.1: Implement TAS computation cron in `scorecardService.ts` and `tas_snapshots` table).
+**Files Changed:**
+- `nagardrishti-frontend/client/src/components/shared/MapView.tsx`
+- `nagardrishti-frontend/client/src/pages/transparency/PublicPages.tsx`
+- `nagardrishti-frontend/client/src/pages/officer/OfficerPages.tsx`
+- `plans/05-implementation-roadmap.md`
+- `plans/progress/SESSION_LOG.md`
+
+---
+
+## Session: 2026-10-03 (Cascade Alert Spatial Deduplication Patch)
+**Phase:** Phase 5 / Phase 6 Preparation (Cascade Alert Deduplication Patch)
+**Completed:**
+- Added spatial proximity deduplication check in `cascadeService.detectCascades()`.
+- Fetches existing active alerts and calculates Haversine distance between new cluster centroid and existing active alert centroids.
+- If an existing active alert exists within the cluster detection radius (`dist <= Math.max(cascade.radiusMeters, existing.radiusMeters)`), updates the existing alert with latest issue IDs, categories, and confidence instead of inserting duplicate rows.
+- Added unit test in `tests/cascadeService.test.ts` verifying duplicate prevention and existing alert updates.
+- Appended mistake entry to `MISTAKES.md`.
+**In Progress:** None (Patch complete).
+**Blocked:** None
+**Key Decisions:**
+- Handled deduplication via spatial proximity tolerance in the application layer rather than compound DB unique constraints, accommodating float coordinate jitter while preserving active alert histories.
+**Next Session Should:** Start Phase 6: TAS Scoring + AI Baselines (Step 6.1: Implement TAS computation cron in `scorecardService.ts` and `tas_snapshots` table).
+**Files Changed:**
+- `nagardrishti-frontend/server/services/cascadeService.ts`
+- `nagardrishti-frontend/tests/cascadeService.test.ts`
+- `MISTAKES.md`
+- `plans/progress/SESSION_LOG.md`
+
+
+
+
+
+

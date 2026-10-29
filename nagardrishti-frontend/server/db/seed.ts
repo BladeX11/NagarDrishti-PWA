@@ -32,10 +32,10 @@ async function seed() {
   // 2. Wards
   console.log('Creating wards...');
   const wards = await db.insert(schema.wards).values([
-    { id: 'ward-11', name: 'Kothrud' },
-    { id: 'ward-12', name: 'Deccan Gymkhana' },
-    { id: 'ward-14', name: 'Swargate' },
-    { id: 'ward-15', name: 'Kalyani Nagar' },
+    { id: 'ward-11', name: 'Kothrud', wardType: 'planned', densityTier: 'medium', taxBand: 'B' },
+    { id: 'ward-12', name: 'Deccan Gymkhana', wardType: 'mixed', densityTier: 'high', taxBand: 'A' },
+    { id: 'ward-14', name: 'Swargate', wardType: 'unplanned', densityTier: 'high', taxBand: 'C' },
+    { id: 'ward-15', name: 'Kalyani Nagar', wardType: 'peri-urban', densityTier: 'low', taxBand: 'D' },
   ]).returning();
 
   // 3. Departments
@@ -111,9 +111,15 @@ async function seed() {
     });
     prevEventHash = eHash;
 
-    if (Number(issue.publicRef.slice(-2)) % 2 === 0) {
-      const triagedTimestamp = new Date(initialTimestamp.getTime() + 1000);
-      const eHash2 = hashEvent(issue.id, 'Triaged', 'SYSTEM', prevEventHash, triagedTimestamp);
+    const wardId = issue.wardId;
+    let finalStatus = 'Open';
+    let slaBreach = false;
+    let reopenCount = 0;
+
+    if (wardId === 'ward-11') {
+      // Planned ward: Prompt response (0.8 - 1.5 days), fast resolution, high SLA compliance
+      const triageTime = new Date(initialTimestamp.getTime() + 6 * 3600 * 1000);
+      const eHashT = hashEvent(issue.id, 'Triaged', 'SYSTEM', prevEventHash, triageTime);
       await db.insert(schema.statusEvents).values({
         issueId: issue.id,
         fromStatus: 'Open',
@@ -122,13 +128,123 @@ async function seed() {
         actorRole: 'system',
         reason: 'Auto-triaged by AI',
         prevHash: prevEventHash,
-        eventHash: eHash2,
-        createdAt: triagedTimestamp,
+        eventHash: eHashT,
+        createdAt: triageTime,
       });
-      prevEventHash = eHash2;
-      
-      await db.update(schema.issues).set({ status: 'Triaged' }).where(eq(schema.issues.id, issue.id));
+      prevEventHash = eHashT;
+
+      const assignTime = new Date(initialTimestamp.getTime() + 24 * 3600 * 1000); // 1.0 day
+      const eHashA = hashEvent(issue.id, 'Assigned', officer.id, prevEventHash, assignTime);
+      await db.insert(schema.statusEvents).values({
+        issueId: issue.id,
+        fromStatus: 'Triaged',
+        toStatus: 'Assigned',
+        actorId: officer.id,
+        actorRole: 'officer',
+        reason: 'Assigned to field engineer',
+        prevHash: prevEventHash,
+        eventHash: eHashA,
+        createdAt: assignTime,
+      });
+      prevEventHash = eHashA;
+      finalStatus = 'Assigned';
+
+      if (index % 2 === 0) {
+        const resolveTime = new Date(initialTimestamp.getTime() + 3 * 86400 * 1000); // 3.0 days
+        const eHashR = hashEvent(issue.id, 'Verified Fixed', 'SYSTEM', prevEventHash, resolveTime);
+        await db.insert(schema.statusEvents).values({
+          issueId: issue.id,
+          fromStatus: 'Assigned',
+          toStatus: 'Verified Fixed',
+          actorId: 'SYSTEM',
+          actorRole: 'system',
+          reason: 'Citizen verified fixed',
+          prevHash: prevEventHash,
+          eventHash: eHashR,
+          createdAt: resolveTime,
+        });
+        prevEventHash = eHashR;
+        finalStatus = 'Verified Fixed';
+      }
+    } else if (wardId === 'ward-14') {
+      // Unplanned ward: Significant response delay (5.0 - 8.0 days), frequent SLA breaches
+      if (index % 4 !== 0) {
+        const delayDays = 5 + (index % 4);
+        const triageTime = new Date(initialTimestamp.getTime() + delayDays * 86400 * 1000);
+        const eHashT = hashEvent(issue.id, 'Triaged', 'SYSTEM', prevEventHash, triageTime);
+        await db.insert(schema.statusEvents).values({
+          issueId: issue.id,
+          fromStatus: 'Open',
+          toStatus: 'Triaged',
+          actorId: 'SYSTEM',
+          actorRole: 'system',
+          reason: 'Delayed triage backlog',
+          prevHash: prevEventHash,
+          eventHash: eHashT,
+          createdAt: triageTime,
+        });
+        prevEventHash = eHashT;
+        finalStatus = 'Triaged';
+
+        const assignTime = new Date(initialTimestamp.getTime() + (delayDays + 1) * 86400 * 1000);
+        const eHashA = hashEvent(issue.id, 'Assigned', officer.id, prevEventHash, assignTime);
+        await db.insert(schema.statusEvents).values({
+          issueId: issue.id,
+          fromStatus: 'Triaged',
+          toStatus: 'Assigned',
+          actorId: officer.id,
+          actorRole: 'officer',
+          reason: 'Escalated assignment',
+          prevHash: prevEventHash,
+          eventHash: eHashA,
+          createdAt: assignTime,
+        });
+        prevEventHash = eHashA;
+        finalStatus = 'Assigned';
+        slaBreach = true;
+        reopenCount = index % 3 === 0 ? 1 : 0;
+      }
+    } else if (wardId === 'ward-12') {
+      // Mixed ward: Moderate response time (~2.0 - 2.5 days)
+      const assignTime = new Date(initialTimestamp.getTime() + 2.2 * 86400 * 1000);
+      const eHashA = hashEvent(issue.id, 'Assigned', officer.id, prevEventHash, assignTime);
+      await db.insert(schema.statusEvents).values({
+        issueId: issue.id,
+        fromStatus: 'Open',
+        toStatus: 'Assigned',
+        actorId: officer.id,
+        actorRole: 'officer',
+        reason: 'Standard allocation',
+        prevHash: prevEventHash,
+        eventHash: eHashA,
+        createdAt: assignTime,
+      });
+      prevEventHash = eHashA;
+      finalStatus = 'Assigned';
+    } else if (wardId === 'ward-15') {
+      // Peri-urban ward: Moderate response (~3.0 days)
+      const assignTime = new Date(initialTimestamp.getTime() + 3.0 * 86400 * 1000);
+      const eHashA = hashEvent(issue.id, 'Assigned', officer.id, prevEventHash, assignTime);
+      await db.insert(schema.statusEvents).values({
+        issueId: issue.id,
+        fromStatus: 'Open',
+        toStatus: 'Assigned',
+        actorId: officer.id,
+        actorRole: 'officer',
+        reason: 'Outlying jurisdiction assignment',
+        prevHash: prevEventHash,
+        eventHash: eHashA,
+        createdAt: assignTime,
+      });
+      prevEventHash = eHashA;
+      finalStatus = 'Assigned';
     }
+
+    await db.update(schema.issues).set({
+      status: finalStatus,
+      slaBreach,
+      reopenCount,
+    }).where(eq(schema.issues.id, issue.id));
   }
 
   // 6. Scorecard Snapshots
