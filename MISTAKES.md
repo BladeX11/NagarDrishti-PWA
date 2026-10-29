@@ -103,3 +103,10 @@
 **Context:** `server/services/privacyService.ts`, `server/services/issueService.ts`, `server/app.ts`, and `server/middleware/auth.ts`
 **Solution:** Hardened `redactForPublic` to recursively strip `privateLat`, `privateLng`, `reporterId`, `exifLat`, `exifLng`, and `privatePath`. Implemented a two-gate media pipeline using `sharp` to store raw photos in an unserved `uploads/private` directory while serving only sanitized WebP derivatives via `/uploads/public`. Gated privileged roles in `requireAuth` to reject unauthenticated header spoofing.
 **Date:** 2026-10-30
+
+
+### Offline Report ID Collisions, Seed Mismatches, Double-Counted Votes, and Fraud Fallback Bypass
+**Problem:** The submit handler caught adversarial duplicate rejections and silently faked success in offline mode; offline report IDs (`ND-100..999`) collided with client seeds (`ND-104..128`); client seed issues did not align with server database seeds; and supporting an offline report double-counted the vote count on reload.
+**Context:** `client/src/pages/citizen/CitizenPages.tsx`, `client/src/components/shared/IssueCard.tsx`, `client/src/data/localDemo.ts`, and `server/db/seed.ts`
+**Solution:** Gated the submit fallback so validation and adversarial image rejections surface real error toasts; partitioned offline IDs to `ND-LOC-XXXX` to prevent collisions; aligned server seeds to match client issues `ND-101..ND-128`; and isolated static seed increments from persisted demo reports so supporter counts reflect exactly 1 vote per user.
+**Date:** 2026-10-30

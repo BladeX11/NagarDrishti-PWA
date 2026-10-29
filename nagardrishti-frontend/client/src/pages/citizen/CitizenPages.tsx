@@ -199,7 +199,40 @@ export function ReportFlow(){
         <button onClick={()=>{setSelectedDuplicate(false);go(6);}} className="mt-4 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] underline">{selectedDuplicate?'Continue anyway →':'None of these — submit new report →'}</button>
       </div>}
       {step===6&&(()=>{const locality=getNearestPuneLocality(location[0],location[1]);return <div><div className="grid gap-5 sm:grid-cols-[150px_1fr]">{photo&&<img src={photo} alt="Report attachment preview" className="h-36 w-full border-4 border-[#2A3320] object-cover grayscale"/>}<div className="space-y-4"><div><p className="eyebrow">Category & service</p><p className="mt-1 font-black">{category} · {categoryDepartmentFor(category)}</p></div><div><p className="eyebrow">Approximate location</p><p className="mt-1 font-bold">{locality.name}, {locality.ward} · Coarsened public pin</p></div><div><p className="eyebrow">Description</p><p className="mt-1 text-sm">{description||'No additional description provided.'}</p></div></div></div><div className="mt-5"><MapView issues={[]} height="130px" pinPosition={location}/></div><div className="mt-6 border-2 border-[#B8892D] bg-[#B8892D]/10 p-4 text-xs leading-relaxed"><b>Privacy preview:</b> Public: approximate location, category, status. Private: your identity, exact coordinates, and original photo metadata.</div></div>;})()}
-      <div className="mt-8 flex flex-wrap justify-between gap-3 border-t-2 border-[#E8E0D0] pt-5">{step>0?<Button variant="outline" onClick={()=>go(step-1)}><ArrowLeft size={14}/>Back</Button>:<span/>}{step<6?<Button onClick={handleNext} disabled={aiSuggestion.loading}>{aiSuggestion.loading?'Classifying...':'Continue'} {!aiSuggestion.loading&&<ArrowRight size={14}/>}</Button>:<Button size="lg" disabled={submitting} onClick={async()=>{setSubmitting(true);try{const locality=getNearestPuneLocality(location[0],location[1]);const issueTitle=formatIssueTitle(category,locality);const langCode=language==="\u0939\u093f\u0928\u094d\u0926\u0940"?"hi":language==="\u092e\u0930\u093e\u0920\u0940"?"mr":"en";const created=await issuesApi.create({title:issueTitle,description:description||`A ${categoryNames[category].toLowerCase()} issue in ${locality.name}.`,category,language:langCode,latitude:location[0],longitude:location[1],photoDataUrl:photo||undefined});setSubmittedId(created.publicRef);setSubmitted(true);toast.success(`Issue ${created.publicRef} is on the public map.`);}catch(e:any){const locality=getNearestPuneLocality(location[0],location[1]);const issueTitle=formatIssueTitle(category,locality);const fallbackRef=`ND-${Math.floor(100+Math.random()*900)}`;const localIssue:Issue={id:fallbackRef,title:issueTitle,description:description||`A ${categoryNames[category].toLowerCase()} issue in ${locality.name}.`,category,status:'Open',department:categoryDepartmentFor(category),ward:locality.ward,age:'Just now',ageInDays:0,supporters:1,position:location,createdAt:new Date().toISOString(),priority:2,urgencyExplanation:`Citizen reported in ${locality.name} via mobile flow`,aiConfidence:aiSuggestion.confidence||85,slaBreach:false,slaDeadlineDays:3,reopenCount:0,verificationVotes:{fixed:0,notFixed:0,unsure:0},proofSubmitted:false,photo:photo||undefined,photoUrl:photo||undefined,media:photo?[{type:'before',publicPath:photo,privatePath:photo}]:[]};saveSubmittedIssue(localIssue);setSubmittedId(fallbackRef);setSubmitted(true);toast.success(`Issue ${fallbackRef} created in offline demo mode.`);}finally{setSubmitting(false);}}}>{submitting?"Submitting...":"Submit report"}</Button>}</div>
+      <div className="mt-8 flex flex-wrap justify-between gap-3 border-t-2 border-[#E8E0D0] pt-5">{step>0?<Button variant="outline" onClick={()=>go(step-1)}><ArrowLeft size={14}/>Back</Button>:<span/>}{step<6?<Button onClick={handleNext} disabled={aiSuggestion.loading}>{aiSuggestion.loading?'Classifying...':'Continue'} {!aiSuggestion.loading&&<ArrowRight size={14}/>}</Button>:<Button size="lg" disabled={submitting} onClick={async()=>{
+        setSubmitting(true);
+        try{
+          const locality=getNearestPuneLocality(location[0],location[1]);
+          const issueTitle=formatIssueTitle(category,locality);
+          const langCode=language==="\u0939\u093f\u0928\u094d\u0926\u0940"?"hi":language==="\u092e\u0930\u093e\u0920\u0940"?"mr":"en";
+          const created=await issuesApi.create({
+            title:issueTitle,
+            description:description||`A ${categoryNames[category].toLowerCase()} issue in ${locality.name}.`,
+            category,
+            language:langCode,
+            latitude:location[0],
+            longitude:location[1],
+            photoDataUrl:photo||undefined
+          });
+          setSubmittedId(created.publicRef);
+          setSubmitted(true);
+          toast.success(`Issue ${created.publicRef} is on the public map.`);
+        }catch(e:any){
+          const errMsg = e?.message || '';
+          const isFraudOrValidation = errMsg.includes('identical image') || errMsg.includes('already been submitted') || errMsg.includes('unauthorized') || errMsg.includes('forbidden') || errMsg.includes('Invalid input');
+          if (isFraudOrValidation) {
+            toast.error(errMsg || 'Report submission was rejected by verification rules.');
+            return;
+          }
+          const locality=getNearestPuneLocality(location[0],location[1]);
+          const issueTitle=formatIssueTitle(category,locality);
+          const fallbackRef=`ND-LOC-${Math.floor(1000+Math.random()*9000)}`;
+          const localIssue:Issue={id:fallbackRef,title:issueTitle,description:description||`A ${categoryNames[category].toLowerCase()} issue in ${locality.name}.`,category,status:'Open',department:categoryDepartmentFor(category),ward:locality.ward,age:'Just now',ageInDays:0,supporters:1,position:location,createdAt:new Date().toISOString(),priority:2,urgencyExplanation:`Citizen reported in ${locality.name} via mobile flow`,aiConfidence:aiSuggestion.confidence||85,slaBreach:false,slaDeadlineDays:3,reopenCount:0,verificationVotes:{fixed:0,notFixed:0,unsure:0},proofSubmitted:false,photo:photo||undefined,photoUrl:photo||undefined,media:photo?[{type:'before',publicPath:photo,privatePath:photo}]:[]};
+          saveSubmittedIssue(localIssue);
+          setSubmittedId(fallbackRef);
+          setSubmitted(true);
+          toast.success(`Issue ${fallbackRef} created in offline demo mode.`);
+        }finally{setSubmitting(false);}}}>{submitting?"Submitting...":"Submit report"}</Button>}</div>
     </Panel><DemoNote/></div>;
 }
 function categoryDepartmentFor(category:Category){return category==='garbage/waste'?'Solid Waste Management':category==='streetlight/electrical'?'Electrical Department':category==='water supply'||category==='drainage/sewage'?'Drainage & Water':'Roads Department';}
@@ -255,7 +288,8 @@ export function CitizenIssueDetail(){
   const beforePhotoUrl = beforeMedia?.publicPath || beforeMedia?.privatePath || issue.photo || issue.photoUrl || issue.media?.find((m:any)=>m.type==='before')?.publicPath || issue.media?.[0]?.publicPath || issue.media?.[0]?.privatePath;
   const votes = issue.verificationVotes ?? { fixed: 0, notFixed: 0, unsure: 0 };
   const baseSupporters = supportCount || (apiIssue?.supporterCount ?? issue.supporters ?? 0);
-  const currentSupporters = (isLocallyVoted && !apiIssue?.hasSupported && supportCount === 0) ? baseSupporters + 1 : baseSupporters;
+  const isStaticSeed = typeof targetId === 'string' && /^ND-1[0-2][0-9]$/.test(targetId);
+  const currentSupporters = (isLocallyVoted && isStaticSeed && !apiIssue?.hasSupported && supportCount === 0) ? baseSupporters + 1 : baseSupporters;
 
   const handleSupport = async () => {
     if (isVoted) {

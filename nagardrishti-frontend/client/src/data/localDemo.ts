@@ -41,7 +41,7 @@ export function addLocalSupport(id: string): void {
   }
   const demoIssues = loadSubmittedIssues();
   const updated = demoIssues.map((issue) => {
-    if (issue.id === id) {
+    if (issue.id === id || (issue as any).publicRef === id) {
       return { ...issue, supporters: (issue.supporters || 0) + 1 };
     }
     return issue;

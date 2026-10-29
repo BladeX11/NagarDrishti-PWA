@@ -62,35 +62,64 @@ async function seed() {
 
   // 5. Issues & Status Events
   console.log('Creating issues & status events...');
-  const seedPoints = [
-    [18.5204, 73.8567], [18.5235, 73.8541], [18.5172, 73.8583], [18.5261, 73.8498],
-    [18.5148, 73.8611], [18.5294, 73.8532], [18.5119, 73.8478], [18.5331, 73.8624],
-    [18.5197, 73.8444], [18.5079, 73.8561], [18.5242, 73.8389], [18.5164, 73.8662],
-    [18.5318, 73.8421], [18.5029, 73.8553], [18.5098, 73.8294], [18.5275, 73.8744],
-    [18.5147, 73.8296], [18.5154, 73.8554], [18.5074, 73.8328], [18.5632, 73.8071],
-    [18.5159, 73.8502], [18.5657, 73.7783], [18.5051, 73.8257], [18.5079, 73.8336],
-    [18.5165, 73.8471],
-  ] as const;
-  const issuesData = [];
-  for (let i = 1; i <= 25; i++) {
-    const [lat, lng] = seedPoints[i - 1];
-    issuesData.push({
-      publicRef: `ND-1${i.toString().padStart(2, '0')}`,
-      title: `Issue reported at Pune Locality ${i}`,
-      description: `Detailed description for issue ${i}`,
-      category: categories[i % categories.length],
-      status: 'Open',
-      departmentId: departments[i % departments.length].id,
-      privateLat: lat,
-      privateLng: lng,
-      publicGeohash: generateGeohash(lat, lng),
-      publicLat: lat,
-      publicLng: lng,
-      wardId: wards[i % wards.length].id,
-      reporterId: citizen.id,
-      assignedTo: officer.id,
-    });
-  }
+  const deptMap: Record<string, string> = {
+    'pothole/road': 'roads',
+    'garbage/waste': 'waste',
+    'drainage/sewage': 'drainage',
+    'water supply': 'water',
+    'streetlight/electrical': 'electrical',
+    'stray animals': 'animals',
+    'encroachment': 'civic-works',
+    'other': 'civic-works',
+  };
+
+  const seedRows = [
+    { ref: 'ND-101', title: 'Road crater at Swargate bus depot', desc: 'Large road crater near entry gate causing passenger bus delays.', cat: 'pothole/road', ward: 'ward-14', pos: [18.5010, 73.8580] },
+    { ref: 'ND-102', title: 'Overflowing bin near Camp market', desc: 'Commercial waste overflowing onto pedestrian walkway.', cat: 'garbage/waste', ward: 'ward-11', pos: [18.5130, 73.8770] },
+    { ref: 'ND-103', title: 'Water leakage on Sinhagad road', desc: 'Damaged main pipe leaking clean water across the road shoulder.', cat: 'water supply', ward: 'ward-14', pos: [18.4600, 73.8200] },
+    { ref: 'ND-104', title: 'Pothole near Shivaji Nagar market', desc: 'A deep pothole has formed beside the market entrance, forcing two-wheelers into oncoming traffic.', cat: 'pothole/road', ward: 'ward-12', pos: [18.5302, 73.8471] },
+    { ref: 'ND-105', title: 'Overflowing bin at Deccan Gymkhana', desc: 'The public bin near the bus stop has been overflowing since yesterday evening.', cat: 'garbage/waste', ward: 'ward-12', pos: [18.5168, 73.8412] },
+    { ref: 'ND-106', title: 'Dark stretch by JM Road bus stop', desc: 'Three streetlights are out along the footpath between the stop and the crossing.', cat: 'streetlight/electrical', ward: 'ward-12', pos: [18.5234, 73.8435] },
+    { ref: 'ND-107', title: 'Drainage overflow at Station Road', desc: 'Wastewater is backing up onto the pavement after the afternoon showers.', cat: 'drainage/sewage', ward: 'ward-11', pos: [18.5316, 73.8584] },
+    { ref: 'ND-108', title: 'Low water pressure on Apte Road', desc: 'Residents on the upper floors have had very low water pressure for two mornings.', cat: 'water supply', ward: 'ward-12', pos: [18.5161, 73.8349] },
+    { ref: 'ND-109', title: 'Uncollected waste near FC Road', desc: 'Several bags have been left beside the collection point since the weekend.', cat: 'garbage/waste', ward: 'ward-12', pos: [18.5238, 73.8418] },
+    { ref: 'ND-110', title: 'Loose paving outside Pune station', desc: 'Broken paving blocks are creating an uneven path close to the east entrance.', cat: 'pothole/road', ward: 'ward-11', pos: [18.5289, 73.8744] },
+    { ref: 'ND-111', title: 'Stray dog shelter needed on Prabhat Road', desc: 'A small group of dogs is sheltering beside the school gate and needs a welfare check.', cat: 'stray animals', ward: 'ward-14', pos: [18.5147, 73.8296] },
+    { ref: 'ND-112', title: 'Footpath encroachment at Laxmi Road', desc: 'Temporary stalls are blocking the accessible route beside the crossing.', cat: 'encroachment', ward: 'ward-11', pos: [18.5154, 73.8554] },
+    { ref: 'ND-113', title: 'Pothole cluster near Nal Stop', desc: 'Two large road depressions have collected water near the junction turn.', cat: 'pothole/road', ward: 'ward-14', pos: [18.5074, 73.8328] },
+    { ref: 'ND-114', title: 'Overflowing bin at Sambhaji Park', desc: 'The litter bin is full and loose waste is spreading into the garden path.', cat: 'garbage/waste', ward: 'ward-12', pos: [18.5201, 73.8479] },
+    { ref: 'ND-115', title: 'Sewage odour near Karve Road', desc: 'A roadside drain is emitting a strong odour and appears partially blocked.', cat: 'drainage/sewage', ward: 'ward-14', pos: [18.5018, 73.8291] },
+    { ref: 'ND-116', title: 'Streetlight out on Bhandarkar Road', desc: 'The lamp opposite the clinic has not switched on for four nights.', cat: 'streetlight/electrical', ward: 'ward-12', pos: [18.5194, 73.8351] },
+    { ref: 'ND-117', title: 'Water leak at Model Colony lane 4', desc: 'Water is seeping through a road-side valve box and pooling near the corner.', cat: 'water supply', ward: 'ward-12', pos: [18.5292, 73.8386] },
+    { ref: 'ND-118', title: 'Loose cattle near Market Yard crossing', desc: 'Two cattle have been wandering into the road at peak traffic time.', cat: 'stray animals', ward: 'ward-15', pos: [18.4944, 73.8721] },
+    { ref: 'ND-119', title: 'Broken footpath at Aundh ITI Road', desc: 'Raised concrete slabs are difficult to pass with a stroller or wheelchair.', cat: 'pothole/road', ward: 'ward-15', pos: [18.5584, 73.8077] },
+    { ref: 'ND-120', title: 'Garbage pile near Kothrud depot', desc: 'A mixed-waste pile is accumulating at the edge of the bus depot entrance.', cat: 'garbage/waste', ward: 'ward-14', pos: [18.5079, 73.8073] },
+    { ref: 'ND-121', title: 'Blocked drain on Ghole Road', desc: 'Leaves and plastic are covering the stormwater inlet near the corner shop.', cat: 'drainage/sewage', ward: 'ward-12', pos: [18.5211, 73.8515] },
+    { ref: 'ND-122', title: 'Illegal dumping by Mula river path', desc: 'Construction debris has narrowed the public walking path by the river.', cat: 'encroachment', ward: 'ward-15', pos: [18.5632, 73.8071] },
+    { ref: 'ND-123', title: 'Damaged traffic sign at Alka Chowk', desc: 'The direction sign is tilted and difficult to read from the turn lane.', cat: 'other', ward: 'ward-11', pos: [18.5159, 73.8502] },
+    { ref: 'ND-124', title: 'Low water flow near Baner Gaon', desc: 'Several homes on the lane report intermittent supply in the morning window.', cat: 'water supply', ward: 'ward-15', pos: [18.5657, 73.7783] },
+    { ref: 'ND-125', title: 'Streetlight flickering at Sarasbaug', desc: 'A lamp on the garden perimeter turns off and on throughout the evening.', cat: 'streetlight/electrical', ward: 'ward-11', pos: [18.5029, 73.8553] },
+    { ref: 'ND-126', title: 'Uncovered manhole at Erandwane', desc: 'A drain cover is missing beside the footpath near the signal.', cat: 'drainage/sewage', ward: 'ward-14', pos: [18.5051, 73.8257] },
+    { ref: 'ND-127', title: 'Roadside litter near Nal Stop', desc: 'Loose cups and wrappers have gathered near the shelter after evening traffic.', cat: 'garbage/waste', ward: 'ward-14', pos: [18.5079, 73.8336] },
+    { ref: 'ND-128', title: 'Broken ramp at Deccan bridge', desc: 'The kerb ramp is chipped and has a steep uneven transition at the crossing.', cat: 'pothole/road', ward: 'ward-12', pos: [18.5165, 73.8471] },
+  ];
+
+  const issuesData = seedRows.map((row) => ({
+    publicRef: row.ref,
+    title: row.title,
+    description: row.desc,
+    category: row.cat,
+    status: 'Open',
+    departmentId: deptMap[row.cat] || 'civic-works',
+    privateLat: row.pos[0],
+    privateLng: row.pos[1],
+    publicGeohash: generateGeohash(row.pos[0], row.pos[1]),
+    publicLat: row.pos[0],
+    publicLng: row.pos[1],
+    wardId: row.ward,
+    reporterId: citizen.id,
+    assignedTo: officer.id,
+  }));
 
   const insertedIssues = await db.insert(schema.issues).values(issuesData).returning();
 

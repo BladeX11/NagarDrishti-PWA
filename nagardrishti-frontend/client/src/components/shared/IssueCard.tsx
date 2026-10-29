@@ -26,7 +26,8 @@ export function IssueCard({
   const [supported, setSupported] = useState<boolean>(() => Boolean((issue as any).hasSupported) || isLocallyVoted);
   const [supportCount, setSupportCount] = useState<number>(() => {
     const base = (issue as any).supporterCount ?? issue.supporters ?? 0;
-    return isLocallyVoted && !(issue as any).hasSupported ? base + 1 : base;
+    const isStaticSeed = typeof targetId === 'string' && /^ND-1[0-2][0-9]$/.test(targetId);
+    return isLocallyVoted && isStaticSeed && !(issue as any).hasSupported ? base + 1 : base;
   });
   const [loading, setLoading] = useState<boolean>(false);
   const photoSrc = (issue as any).photo || (issue as any).photoUrl || (issue as any).media?.find((m: any) => m.type === 'before')?.publicPath || (issue as any).media?.[0]?.publicPath || (issue as any).media?.[0]?.privatePath;

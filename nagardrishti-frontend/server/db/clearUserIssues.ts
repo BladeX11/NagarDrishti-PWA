@@ -18,10 +18,11 @@ async function safeDelete(tableName: string, fn: () => Promise<any>) {
 async function clearUserRegisteredIssues() {
   console.log('🔍 Checking for user-registered issues in database...');
 
-  // Default seed refs from seed.ts: ND-101 to ND-125
-  const defaultRefs = new Set(
-    Array.from({ length: 25 }, (_, i) => `ND-1${(i + 1).toString().padStart(2, '0')}`)
-  );
+  // Default seed refs from seed.ts: ND-101 to ND-128
+  const defaultRefs = new Set([
+    ...Array.from({ length: 25 }, (_, i) => `ND-1${(i + 1).toString().padStart(2, '0')}`),
+    ...Array.from({ length: 25 }, (_, i) => `ND-${104 + i}`),
+  ]);
 
   const allIssues = await db.select({
     id: schema.issues.id,
@@ -31,7 +32,7 @@ async function clearUserRegisteredIssues() {
   }).from(schema.issues);
 
   const userIssues = allIssues.filter(
-    (issue) => !defaultRefs.has(issue.publicRef) && !issue.title.startsWith('Issue reported at Pune Locality')
+    (issue) => !defaultRefs.has(issue.publicRef)
   );
 
   if (userIssues.length === 0) {
