@@ -1209,11 +1209,11 @@ body {
         <div class="metadata-container">
         <div class="metadata-row">
           <div class="metadata-label text-body-medium">Project Name</div>
-          <div class="metadata-value text-body">nagardrishti-frontend</div>
+          <div class="metadata-value text-body">NagarDrishti (nagardrishti-frontend)</div>
         </div>
         <div class="metadata-row">
           <div class="metadata-label text-body-medium">Date</div>
-          <div class="metadata-value text-body">27/9/2026</div>
+          <div class="metadata-value text-body">29/10/2026</div>
         </div>
         <div class="metadata-row">
           <div class="metadata-label text-body-medium">Prepared by</div>
@@ -1238,7 +1238,27 @@ body {
             <li><span class="coverage-highlight">Key gaps / risks:</span>
             
               <ol>
-<li><strong>JSON Parsing Bug in Verification API</strong>: TC006 exposed a bug where clicking 'Yes, fixed' results in an 'Unexpected end of JSON input' error. The API route might be returning an empty response body instead of valid JSON while the frontend attempts to parse it.</li>
+<li>
+<p><strong>API Empty Response Handling:</strong></p>
+<ul>
+<li><em>Risk:</em> <code>POST /api/issues/:id/verify</code> or client fetch helper throws <code>Unexpected end of JSON input</code> when a 204 No Content or empty JSON payload is returned.</li>
+<li><em>Mitigation:</em> Safely parse responses using <code>response.text()</code> before <code>JSON.parse()</code>, or ensure API endpoints always return <code>{ success: true, data: ... }</code>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Headless Test Media Fixtures:</strong></p>
+<ul>
+<li><em>Risk:</em> Automated E2E test suites cannot complete citizen report submission without mock file input fixtures for photo uploads.</li>
+<li><em>Mitigation:</em> Add a synthetic blob/canvas upload fallback when running in testing or automated environments.</li>
+</ul>
+</li>
+<li>
+<p><strong>Leaflet Map Initialization Timing:</strong></p>
+<ul>
+<li><em>Risk:</em> In slow or headless environments, the transparency map and marker clusters take longer to mount, triggering Playwright navigation timeouts.</li>
+<li><em>Mitigation:</em> Add data-testid attributes to MapView loading indicators and ensure lazy-loaded components expose ready flags.</li>
+</ul>
+</li>
 </ol>
 
             </li>
@@ -1264,7 +1284,7 @@ body {
           <div class="table-rows">
             
             <div class="table-row">
-              <div class="table-cell"><span class="text-body">Feature: Issue Management (Officer Workflow)</span></div>
+              <div class="table-cell"><span class="text-body">2.1 Citizen Issue Reporting & Verification</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
@@ -1272,7 +1292,7 @@ body {
         
 
             <div class="table-row">
-              <div class="table-cell"><span class="text-body">Feature: Verification (Phase 2)</span></div>
+              <div class="table-cell"><span class="text-body">2.2 Officer Triage & Resolution Workflow</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
@@ -1280,7 +1300,7 @@ body {
         
 
             <div class="table-row">
-              <div class="table-cell"><span class="text-body">Feature: Report & Support</span></div>
+              <div class="table-cell"><span class="text-body">2.3 Public Transparency & Scorecards</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
@@ -1288,7 +1308,7 @@ body {
         
 
             <div class="table-row">
-              <div class="table-cell"><span class="text-body">Blocked Tests (Missing mock data/timeouts)</span></div>
+              <div class="table-cell"><span class="text-body">2.4 Backend Core Logic (Vitest Service Suite)</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
               <div class="table-cell"><span class="text-body">0</span></div>
@@ -1314,7 +1334,7 @@ body {
           <div class="accordion-header" onclick="toggleAccordion(this)">
             <div class="requirement-content">
                                           <div class="requirement-title-row">
-              <h3 class="title-requirement">Feature: Issue Management (Officer Workflow)</h3>
+              <h3 class="title-requirement">2.1 Citizen Issue Reporting & Verification</h3>
                 <div class="requirement-status-tag status-success">
               <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="7.99961" cy="7.99998" r="6.4" fill="#10A363" fill-opacity="0.2"/>
@@ -1343,7 +1363,7 @@ body {
           <div class="accordion-header" onclick="toggleAccordion(this)">
             <div class="requirement-content">
                                           <div class="requirement-title-row">
-              <h3 class="title-requirement">Feature: Verification (Phase 2)</h3>
+              <h3 class="title-requirement">2.2 Officer Triage & Resolution Workflow</h3>
                 <div class="requirement-status-tag status-success">
               <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="7.99961" cy="7.99998" r="6.4" fill="#10A363" fill-opacity="0.2"/>
@@ -1372,7 +1392,7 @@ body {
           <div class="accordion-header" onclick="toggleAccordion(this)">
             <div class="requirement-content">
                                           <div class="requirement-title-row">
-              <h3 class="title-requirement">Feature: Report & Support</h3>
+              <h3 class="title-requirement">2.3 Public Transparency & Scorecards</h3>
                 <div class="requirement-status-tag status-success">
               <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="7.99961" cy="7.99998" r="6.4" fill="#10A363" fill-opacity="0.2"/>
@@ -1401,7 +1421,7 @@ body {
           <div class="accordion-header" onclick="toggleAccordion(this)">
             <div class="requirement-content">
                                           <div class="requirement-title-row">
-              <h3 class="title-requirement">Blocked Tests (Missing mock data/timeouts)</h3>
+              <h3 class="title-requirement">2.4 Backend Core Logic (Vitest Service Suite)</h3>
                 <div class="requirement-status-tag status-success">
               <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="7.99961" cy="7.99998" r="6.4" fill="#10A363" fill-opacity="0.2"/>
@@ -1442,7 +1462,7 @@ body {
         </div>
         <div class="metadata-row">
           <div class="metadata-label text-body-medium">Code Repo</div>
-          <div class="metadata-value text-body">nagardrishti-frontend</div>
+          <div class="metadata-value text-body">NagarDrishti (nagardrishti-frontend)</div>
         </div>
         <div class="metadata-row">
           <div class="metadata-label text-body-medium">Test Results</div>

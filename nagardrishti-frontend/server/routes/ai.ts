@@ -2,7 +2,7 @@ import { Router } from "express";
 
 const router = Router();
 
-const RULES = [
+export const RULES = [
   { keywords: ["pothole","road","tar","asphalt","crack","pavement","speed bump","broken road","manhole"], category: "pothole/road", confidence: 0.87 },
   { keywords: ["garbage","waste","trash","dump","litter","rubbish","smell","dirty","plastic","overflowing"], category: "garbage/waste", confidence: 0.84 },
   { keywords: ["drain","drainage","sewer","sewage","overflow","flood","waterlog","stagnant","blockage"], category: "drainage/sewage", confidence: 0.85 },
@@ -12,9 +12,9 @@ const RULES = [
   { keywords: ["encroach","encroachment","occupy","illegal","hawker","footpath","block","construction"], category: "encroachment", confidence: 0.78 },
 ];
 
-const DEFAULT = { category: "other", confidence: 0.55 };
+export const DEFAULT = { category: "other", confidence: 0.55 };
 
-function classify(text: string) {
+export function classify(text: string) {
   const lower = text.toLowerCase();
   let best = DEFAULT;
   for (const rule of RULES) {

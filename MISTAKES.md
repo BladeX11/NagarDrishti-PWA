@@ -71,3 +71,35 @@
 **Context:** `server/services/cascadeService.ts` detectCascades
 **Solution:** Added pre-insertion query of existing active alerts and used Haversine distance threshold (`dist <= Math.max(cascade.radiusMeters, existing.radiusMeters)`) to detect identical spatial zones. Existing active alerts are updated with the latest issue IDs and cluster metrics instead of inserting duplicate rows.
 **Date:** 2026-10-03
+
+
+### Non-UUID Demo User ID Causing PostgreSQL FK Crash
+**Problem:** `createIssue` and `verificationService.castVote` crashed with PostgreSQL syntax error `invalid input syntax for type uuid: "demo-citizen"` when running in development/demo mode without existing user rows.
+**Context:** `server/middleware/auth.ts`, `server/services/issueService.ts`, and `server/services/verificationService.ts`
+**Solution:** Added deterministic fallback UUIDs per role in `auth.ts` and added UUID regex validation in `createIssue` and `castVote` to map non-UUID demo IDs to valid user UUIDs before executing SQL queries.
+**Date:** 2026-10-29
+
+### Uploaded Images Missing in Registered Reports and Detail Views
+**Problem:** Uploaded report photos were not visible in registered issue lists ("My reports") or issue detail views.
+**Context:** `client/src/components/shared/IssueCard.tsx`, `client/src/pages/citizen/CitizenPages.tsx`, and `server/services/issueService.ts`
+**Solution:** Preserved base64 photo data and media array during local demo issue creation, added media batch fetching in `listIssues`, rendered photo thumbnails in `IssueCard`, and resolved before-photo URLs across all media fallbacks in `CitizenIssueDetail` and `OfficerIssueDetail`.
+**Date:** 2026-10-30
+
+### Support Action Failing Offline and Generic City-Wide Issue Titles
+**Problem:** Clicking Support failed with an error toast when PostgreSQL was offline or when targeting demo reports. Issue titles were generically titled "in Pune" without reflecting specific Pune neighborhoods.
+**Context:** `client/src/components/shared/IssueCard.tsx`, `client/src/pages/citizen/CitizenPages.tsx`, and `client/src/data/puneLocalities.ts`
+**Solution:** Added local storage voting persistence with optimistic increments in `IssueCard` and `CitizenIssueDetail`, and implemented geographic nearest-neighbor locality matching (`getNearestPuneLocality`) to automatically generate titles like "Drainage and sewage issue in Katraj" or "Waste and garbage issue in Kondhwa".
+**Date:** 2026-10-30
+
+### Duplicates Detection Ignoring Local Demo Reports and Failing Offline
+**Problem:** Step 5 of the report flow (Duplicates) failed to detect previously submitted reports and showed "No similar reports found nearby", because it only queried backend `issuesApi.list` without pooling local demo reports or seed issues.
+**Context:** `client/src/pages/citizen/CitizenPages.tsx` and `client/src/data/duplicateDetector.ts`
+**Solution:** Built a multi-source duplicate matcher in `duplicateDetector.ts` that pools local demo reports, seed issues, and backend reports, scoring them by category match, GPS Haversine proximity, and keyword overlap, and wired interactive local support in the duplicates card.
+**Date:** 2026-10-30
+
+
+### Leaking GPS and EXIF Metadata in Public API and Static Upload Serving
+**Problem:** Public API endpoints returned exact citizen GPS coordinates, reporter UUIDs, and raw photo paths. Static upload routes served unredacted original photos containing EXIF location data, and privileged roles could be spoofed via unauthenticated `x-demo-role` HTTP headers.
+**Context:** `server/services/privacyService.ts`, `server/services/issueService.ts`, `server/app.ts`, and `server/middleware/auth.ts`
+**Solution:** Hardened `redactForPublic` to recursively strip `privateLat`, `privateLng`, `reporterId`, `exifLat`, `exifLng`, and `privatePath`. Implemented a two-gate media pipeline using `sharp` to store raw photos in an unserved `uploads/private` directory while serving only sanitized WebP derivatives via `/uploads/public`. Gated privileged roles in `requireAuth` to reject unauthenticated header spoofing.
+**Date:** 2026-10-30

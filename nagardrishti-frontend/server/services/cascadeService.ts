@@ -196,16 +196,20 @@ export const cascadeService = {
       );
 
     const validPoints: IssueCoordinate[] = activeIssues
-      .filter((i) => typeof i.lat === 'number' && typeof i.lng === 'number' && !isNaN(i.lat) && !isNaN(i.lng))
-      .map((i) => ({
-        id: i.id,
-        category: i.category,
-        lat: i.lat,
-        lng: i.lng,
-        wardId: i.wardId,
-        createdAt: i.createdAt ? new Date(i.createdAt) : new Date(),
-        status: i.status,
-      }));
+      .map((i: any) => {
+        const lat = typeof i.lat === 'number' ? i.lat : i.privateLat;
+        const lng = typeof i.lng === 'number' ? i.lng : i.privateLng;
+        return {
+          id: i.id,
+          category: i.category,
+          lat: Number(lat),
+          lng: Number(lng),
+          wardId: i.wardId,
+          createdAt: i.createdAt ? new Date(i.createdAt) : new Date(),
+          status: i.status,
+        };
+      })
+      .filter((i) => typeof i.lat === 'number' && typeof i.lng === 'number' && !isNaN(i.lat) && !isNaN(i.lng));
 
     if (validPoints.length < minSamples) {
       return [];

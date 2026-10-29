@@ -39,6 +39,9 @@ export type Issue = {
   verificationVotes: { fixed: number; notFixed: number; unsure: number };
   proofSubmitted: boolean;
   assignedOfficer?: string;
+  photo?: string;
+  photoUrl?: string;
+  media?: Array<{ id?: string; type: string; publicPath?: string; privatePath?: string }>;
 };
 
 export type StatusEvent = {

@@ -1,6 +1,6 @@
 import { db } from '../db/index.js';
 import { issues, issueMedia, issueSupporters, verificationVotes, statusEvents, users } from '../db/schema.js';
-import { eq, desc, sql, and } from 'drizzle-orm';
+import { eq, desc, sql, and, inArray } from 'drizzle-orm';
 import { privacyService } from './privacyService.js';
 import { auditService } from './auditService.js';
 import { priorityService } from './priorityService.js';
@@ -45,7 +45,8 @@ export const issueService = {
   ) {
     let fileHash: string | null = null;
     let perceptualHash: string | null = null;
-    let storedMediaPath: string | null = null;
+    let privateMediaPath: string | null = null;
+    let publicMediaPath: string | null = null;
     let mimeType: string | null = null;
     let fileSize: number | null = null;
 
@@ -68,16 +69,39 @@ export const issueService = {
         }
 
         const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-        const filename = `${nanoid(12)}_${Date.now()}.${ext}`;
-        const issueUploadsDir = path.resolve(process.cwd(), 'uploads', 'issues');
-        await fs.mkdir(issueUploadsDir, { recursive: true });
-        await fs.writeFile(path.join(issueUploadsDir, filename), buffer);
+        const privateFilename = `${nanoid(12)}_${Date.now()}.${ext}`;
+        const privateDir = path.resolve(process.cwd(), 'uploads', 'private');
+        await fs.mkdir(privateDir, { recursive: true });
+        await fs.writeFile(path.join(privateDir, privateFilename), buffer);
+        privateMediaPath = `/uploads/private/${privateFilename}`;
 
-        storedMediaPath = `/uploads/issues/${filename}`;
+        // Generate sanitized EXIF-stripped public WebP derivative using sharp
+        try {
+          const sharpModule = await import('sharp');
+          const sharp = sharpModule.default || sharpModule;
+          const publicFilename = `${nanoid(12)}_${Date.now()}.webp`;
+          const publicDir = path.resolve(process.cwd(), 'uploads', 'public');
+          await fs.mkdir(publicDir, { recursive: true });
+          const sanitizedBuffer = await sharp(buffer)
+            .rotate()
+            .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 80 })
+            .toBuffer();
+          await fs.writeFile(path.join(publicDir, publicFilename), sanitizedBuffer);
+          publicMediaPath = `/uploads/public/${publicFilename}`;
+        } catch {
+          // Safe fallback if buffer parsing encounters atypical format
+          const publicFilename = `${nanoid(12)}_${Date.now()}.${ext}`;
+          const publicDir = path.resolve(process.cwd(), 'uploads', 'public');
+          await fs.mkdir(publicDir, { recursive: true });
+          await fs.writeFile(path.join(publicDir, publicFilename), buffer);
+          publicMediaPath = `/uploads/public/${publicFilename}`;
+        }
       } else {
         fileHash = createHash('sha256').update(data.photoDataUrl).digest('hex');
         perceptualHash = fileHash.substring(0, 16);
-        storedMediaPath = data.photoDataUrl;
+        privateMediaPath = data.photoDataUrl;
+        publicMediaPath = data.photoDataUrl;
       }
     }
 
@@ -96,7 +120,19 @@ export const issueService = {
       slaBreach: false,
     });
 
-    // 4. Insert issue
+    // 4. Resolve reporterId if demo or non-uuid string
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reporterId);
+    let resolvedReporterId = reporterId;
+    if (!isUserUuid) {
+      try {
+        const [u] = await db.select().from(users).where(eq(users.role, 'citizen')).limit(1);
+        resolvedReporterId = u ? u.id : '00000000-0000-0000-0000-000000000001';
+      } catch {
+        resolvedReporterId = '00000000-0000-0000-0000-000000000001';
+      }
+    }
+
+    // 5. Insert issue
     const [issue] = await db
       .insert(issues)
       .values({
@@ -115,16 +151,16 @@ export const issueService = {
         slaDeadline,
         priority: priorityResult.priority,
         urgencyExplanation: priorityResult.explanation,
-        reporterId,
+        reporterId: resolvedReporterId,
       })
       .returning();
 
-    if (fileHash && storedMediaPath) {
+    if (fileHash && privateMediaPath && publicMediaPath) {
       await db.insert(issueMedia).values({
         issueId: issue.id,
         type: 'before',
-        privatePath: storedMediaPath,
-        publicPath: storedMediaPath,
+        privatePath: privateMediaPath,
+        publicPath: publicMediaPath,
         fileHash,
         perceptualHash,
         fileSize: fileSize ?? undefined,
@@ -243,7 +279,7 @@ export const issueService = {
 
     const wardName = issue.wardId ? (WARD_NAMES[issue.wardId] || issue.wardId) : 'Ward 11';
 
-    return {
+    const fullIssue = {
       ...issue,
       // Public location (coarsened)
       latitude: issue.publicLat,
@@ -264,6 +300,12 @@ export const issueService = {
       },
       events: formattedEvents,
     };
+
+    if (currentUserId && currentUserId === issue.reporterId) {
+      return fullIssue;
+    }
+
+    return privacyService.redactForPublic(fullIssue) as typeof fullIssue;
   },
 
   /**
@@ -325,14 +367,40 @@ export const issueService = {
       }
     }
 
+    const issueIds = results.map((r) => r.id);
+    const mediaByIssue = new Map<string, any[]>();
+    if (issueIds.length > 0) {
+      try {
+        const mediaList = await db
+          .select()
+          .from(issueMedia)
+          .where(inArray(issueMedia.issueId, issueIds));
+        for (const m of mediaList) {
+          if (m.issueId) {
+            const list = mediaByIssue.get(m.issueId) || [];
+            list.push(m);
+            mediaByIssue.set(m.issueId, list);
+          }
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
     const items = results.map((issue) => {
       const { age, ageInDays } = computeAge(issue.createdAt!);
       const updatedAge = computeAge(issue.updatedAt || issue.createdAt!).age;
       const wardName = issue.wardId ? (WARD_NAMES[issue.wardId] || issue.wardId) : 'Ward 11';
       const slaDeadlineDays = issue.slaDeadline ? Math.max(1, Math.round((new Date(issue.slaDeadline).getTime() - new Date(issue.createdAt!).getTime()) / 86400000)) : 3;
       const slaBreach = issue.slaDeadline ? (new Date(issue.slaDeadline).getTime() < Date.now() && issue.status !== 'Verified Fixed' && issue.status !== 'Claimed Resolved') : false;
+      const issueMediaList = (mediaByIssue.get(issue.id) || []).map((m: any) => {
+        const { exifLat, exifLng, privatePath, ...safeMedia } = m;
+        return safeMedia;
+      });
+      const beforeMediaItem = issueMediaList.find((m: any) => m.type === 'before');
+      const photoUrl = beforeMediaItem?.publicPath;
 
-      return {
+      const rawItem = {
         ...issue,
         ward: wardName,
         supporters: issue.supporterCount ?? 0,
@@ -345,7 +413,11 @@ export const issueService = {
         age,
         updatedAge,
         ageInDays,
+        media: issueMediaList,
+        photoUrl,
       };
+
+      return privacyService.redactForPublic(rawItem) as any;
     });
 
     return {

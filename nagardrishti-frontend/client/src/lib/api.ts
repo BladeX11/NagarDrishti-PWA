@@ -30,11 +30,21 @@ async function request<T>(
   if (role) headers['x-demo-role'] = role;
 
   const res = await fetch(`${BASE}${path}`, { ...options, headers });
-  const json = await res.json();
-  if (!json.success) {
-    throw new Error(json.error ?? `API error ${res.status}`);
+  const text = await res.text();
+  let json: any = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(res.ok ? 'Invalid response format from server' : 'Server error (' + res.status + '): ' + text.slice(0, 100));
+    }
+  } else if (!res.ok) {
+    throw new Error('API error ' + res.status);
   }
-  return json.data as T;
+  if (!res.ok || (json && json.success === false)) {
+    throw new Error(json?.error ?? ('API error ' + res.status));
+  }
+  return (json?.data !== undefined ? json.data : (json ?? {})) as T;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -81,6 +91,9 @@ export interface ApiIssue {
   age: string;
   ageInDays: number;
   reporterId?: string;
+  photo?: string;
+  photoUrl?: string;
+  media?: Array<{ id?: string; type: string; publicPath?: string; privatePath?: string }>;
 }
 
 export interface ApiIssueList {

@@ -25,9 +25,12 @@ export function createApp(): Express {
     credentials: true,
   }));
 
-  // Serve uploaded media files
-  const uploadsDir = path.resolve(process.cwd(), 'uploads');
-  app.use('/uploads', express.static(uploadsDir));
+  // Serve sanitized public media files only
+  const publicUploadsDir = path.resolve(process.cwd(), 'uploads', 'public');
+  app.use('/uploads/public', express.static(publicUploadsDir));
+  // Backward compatibility alias for legacy seeded/existing issue photos
+  const legacyUploadsDir = path.resolve(process.cwd(), 'uploads', 'issues');
+  app.use('/uploads/issues', express.static(legacyUploadsDir));
 
   // Body Parsing Middleware
   app.use(express.json({ limit: '10mb' }));

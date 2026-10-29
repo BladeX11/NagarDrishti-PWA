@@ -456,6 +456,7 @@ export function OfficerIssueDetail() {
   const wardDisplay = getWardLabel(base);
   const supportersCount = base.supporters ?? base.supporterCount ?? 0;
   const beforeMedia = (apiIssue as any)?.media?.find((m: any) => m.type === 'before');
+  const beforePhotoUrl = beforeMedia?.publicPath || beforeMedia?.privatePath || (base as any).photo || (base as any).photoUrl || (base as any).media?.find((m: any) => m.type === 'before')?.publicPath || (base as any).media?.[0]?.publicPath;
 
   if (loading && !apiIssue && !matchedSeed) {
     return (
@@ -504,8 +505,8 @@ export function OfficerIssueDetail() {
             <p className="eyebrow mb-3">Evidence & location</p>
             <div className="grid gap-4 md:grid-cols-2">
               <Panel className="flex min-h-52 flex-col items-center justify-center border-4 bg-[#D8C9A8]/40">
-                {(beforeMedia?.publicPath || beforeMedia?.privatePath) ? (
-                  <img src={beforeMedia.publicPath || beforeMedia.privatePath} alt="Issue photo" className="h-44 w-full object-cover grayscale transition-all hover:grayscale-0" />
+                {beforePhotoUrl ? (
+                  <img src={beforePhotoUrl} alt="Issue photo" className="h-44 w-full object-cover grayscale transition-all hover:grayscale-0" />
                 ) : (
                   <>
                     <CameraGlyph />

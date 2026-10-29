@@ -95,9 +95,16 @@ export const privacyService = {
 
   /**
    * Strip private fields from an issue for public API responses.
+   * Strips exact GPS (privateLat, privateLng), reporterId, and photo EXIF/private paths.
    */
   redactForPublic(issue: Record<string, unknown>) {
     const { privateLat, privateLng, reporterId, ...publicFields } = issue;
+    if (Array.isArray(publicFields.media)) {
+      publicFields.media = (publicFields.media as any[]).map((m: any) => {
+        const { exifLat, exifLng, privatePath, ...safeMedia } = m;
+        return safeMedia;
+      });
+    }
     return publicFields;
   },
 };

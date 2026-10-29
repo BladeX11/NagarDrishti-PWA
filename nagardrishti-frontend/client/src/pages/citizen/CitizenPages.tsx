@@ -3,7 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Activity, ArrowLeft, ArrowRight, Bell, Check, Camera, ChevronRight, Clock3, Compass, Droplet, Eye, FileCheck2, Languages, MapPin, ShieldCheck, Sparkles, ThumbsUp, Users, Vote, X, type LucideIcon } from 'lucide-react';
 import { issues as seedIssues, statusEvents, demoNotifications } from '../../data/seed';
-import { loadSubmittedIssues } from '../../data/localDemo';
+import { loadSubmittedIssues, saveSubmittedIssue, isIssueSupportedLocally, addLocalSupport } from '../../data/localDemo';
+import { getNearestPuneLocality, formatIssueTitle } from '../../data/puneLocalities';
+import { findSimilarIssues, type SimilarIssue } from '../../data/duplicateDetector';
 import { issuesApi, mapApi, type ApiIssue } from '../../lib/api';
 import type { Category, Issue, IssueStatus } from '../../types';
 import { categories } from '../../types';
@@ -51,7 +53,18 @@ export function ExploreMap(){
 export function ReportFlow(){
   const [step,setStep]=useState(0); const [category,setCategory]=useState<Category>('pothole/road'); const [description,setDescription]=useState(''); const [language,setLanguage]=useState('English'); const [photo,setPhoto]=useState(''); const [location,setLocation]=useState<[number,number]>([18.5204,73.8567]); const [submitted,setSubmitted]=useState(false); const [submittedId,setSubmittedId]=useState(''); const [selectedDuplicate,setSelectedDuplicate]=useState(false); const [submitting,setSubmitting]=useState(false);
   const [aiSuggestion,setAiSuggestion]=useState<{category:Category;confidence:number;department:string;loading:boolean}>({category:'pothole/road',confidence:0,department:'Roads Department',loading:false});
-  const [apiDuplicates,setApiDuplicates]=useState<ApiIssue[]>([]);
+  const [apiDuplicates,setApiDuplicates]=useState<SimilarIssue[]>([]);
+  const [loadingDuplicates,setLoadingDuplicates]=useState(false);
+  const [supportedDuplicateIds,setSupportedDuplicateIds]=useState<string[]>([]);
+
+  useEffect(()=>{
+    if(step===5){
+      setLoadingDuplicates(true);
+      findSimilarIssues({category,latitude:location[0],longitude:location[1],description})
+        .then(setApiDuplicates)
+        .finally(()=>setLoadingDuplicates(false));
+    }
+  },[step,category,location,description]);
 
   async function runClassify(text:string){
     if(!text.trim())return;
@@ -115,9 +128,11 @@ export function ReportFlow(){
   const handleNext=async()=>{
     if(step===3 && description.trim()) await runClassify(description);
     if(step===4){
-      // Fetch real similar issues from the DB when entering duplicates step
       setSelectedDuplicate(false);
-      issuesApi.list({category,limit:5}).then(r=>setApiDuplicates(r.items.slice(0,4))).catch(()=>{});
+      setLoadingDuplicates(true);
+      findSimilarIssues({category,latitude:location[0],longitude:location[1],description})
+        .then(setApiDuplicates)
+        .finally(()=>setLoadingDuplicates(false));
     }
     go(step+1);
   };
@@ -127,8 +142,8 @@ export function ReportFlow(){
     <PageHeader eyebrow="Community reporting" title="Report an issue" description="A short report helps your neighbourhood turn a concern into a visible, trackable action."/>
     <div className="mb-8 flex items-center">{steps.map((name,index)=><div key={name} className="flex flex-1 items-center last:flex-none"><button aria-label={`Step ${index+1}: ${name}`} onClick={()=>index<step&&go(index)} className={`flex h-8 w-8 shrink-0 items-center justify-center border-2 border-[#2A3320] text-[10px] font-black ${index<step?'bg-[#4F5B2A] text-white':index===step?'border-4 bg-[#B8892D] text-[#2A3320]':'bg-[#E8E0D0] text-[#2A3320]/45'}`}>{index<step?<Check size={14}/>:index+1}</button>{index<steps.length-1&&<div className={`mx-1 h-[2px] flex-1 ${index<step?'bg-[#4F5B2A]':'bg-[#D8C9A8]'}`}/>}</div>)}</div>
     <Panel className="border-4" padding="p-5 md:p-8"><div className="mb-6 flex items-center justify-between border-b-2 border-[#E8E0D0] pb-4"><div><p className="eyebrow">Step {step+1} of 7</p><h2 className="display-title mt-1 text-xl">{steps[step]}</h2></div><span className="text-[10px] font-black uppercase tracking-widest text-[#2A3320]/40">{Math.round((step+1)/7*100)}%</span></div>
-      {step===0&&<div><label className="flex min-h-64 cursor-pointer flex-col items-center justify-center border-4 border-dashed border-[#2A3320] bg-[#D8C9A8]/20 p-6 text-center transition-colors hover:bg-[#D8C9A8]/40">{photo?<img src={photo} alt="Selected report" className="max-h-56 max-w-full border-2 border-[#2A3320] object-contain"/>:<><Camera size={34}/><span className="display-title mt-4 text-xl">Tap to capture</span><span className="mt-2 text-xs text-[#2A3320]/60">or choose a photo from your gallery</span></>}<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={onPhoto}/></label><p className="mt-3 text-center text-[10px] font-medium text-[#2A3320]/60">Photo is recommended but optional. Original photo metadata is not shared publicly.</p></div>}
-      {step===1&&<div><div className="mb-4 flex items-center gap-2 border-2 border-[#B8892D] bg-[#B8892D]/10 p-3 text-xs font-bold"><MapPin size={16}/>Your pin will be coarsened for privacy. Tap the map to place it manually.</div><MapView issues={seedIssues.slice(0,7)} height="270px" pinPosition={location} onPinChange={setLocation}/><div className="mt-4 flex flex-wrap gap-2"><Button variant="gold" onClick={()=>{if(!navigator.geolocation){toast.error('Location services are not available in this browser.');return;}navigator.geolocation.getCurrentPosition(position=>{setLocation([Math.round(position.coords.latitude*200)/200,Math.round(position.coords.longitude*200)/200]);toast.success('Your approximate location is set.');},()=>toast.error('Location could not be accessed. You can place the pin manually.'),{enableHighAccuracy:false,timeout:8000,maximumAge:300000});}}>Use my location</Button><Button variant="outline" onClick={()=>toast.info('Tap anywhere on the map to place the approximate pin.')}>Place manually</Button></div><p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/55">⌖ Public pin shows approximate area only · Location is rounded before it is saved</p></div>}
+      {step===0&&<div><label className="flex min-h-64 cursor-pointer flex-col items-center justify-center border-4 border-dashed border-[#2A3320] bg-[#D8C9A8]/20 p-6 text-center transition-colors hover:bg-[#D8C9A8]/40">{photo?<img src={photo} alt="Selected report" className="max-h-56 max-w-full border-2 border-[#2A3320] object-contain"/>:<><Camera size={34}/><span className="display-title mt-4 text-xl">Tap to capture</span><span className="mt-2 text-xs text-[#2A3320]/60">or choose a photo from your gallery</span></>}<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={onPhoto}/></label><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-medium text-[#2A3320]/60">Photo is recommended but optional. Original photo metadata is not shared publicly.</p>{!photo&&<button type="button" onClick={()=>{const samplePhoto='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';setPhoto(samplePhoto);runClassify('sample pothole road damage photo');toast.success('Sample photo attached for demo.');}} className="border-2 border-[#2A3320] bg-white px-2 py-1 text-[9px] font-black uppercase tracking-wider text-[#4F5B2A] hover:bg-[#D8C9A8]">Use sample photo</button>}</div></div>}
+      {step===1&&(()=>{const locality=getNearestPuneLocality(location[0],location[1]);return <div><div className="mb-4 flex items-center gap-2 border-2 border-[#B8892D] bg-[#B8892D]/10 p-3 text-xs font-bold"><MapPin size={16}/><span>Selected area: <b>{locality.name}</b> ({locality.ward}). Tap map or use location to move pin.</span></div><MapView issues={seedIssues.slice(0,7)} height="270px" pinPosition={location} onPinChange={setLocation}/><div className="mt-4 flex flex-wrap gap-2"><Button variant="gold" onClick={()=>{if(!navigator.geolocation){toast.error('Location services are not available in this browser.');return;}navigator.geolocation.getCurrentPosition(position=>{setLocation([Math.round(position.coords.latitude*200)/200,Math.round(position.coords.longitude*200)/200]);toast.success('Your approximate location is set.');},()=>toast.error('Location could not be accessed. You can place the pin manually.'),{enableHighAccuracy:false,timeout:8000,maximumAge:300000});}}>Use my location</Button><Button variant="outline" onClick={()=>toast.info('Tap anywhere on the map to place the approximate pin.')}>Place manually</Button></div><p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/55">⌖ Public pin shows approximate area only · Location is rounded before it is saved</p></div>;})()}
       {step===2&&<div><p className="mb-4 text-sm text-[#2A3320]/65">Choose the closest category. The AI suggestion is editable.</p><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{categories.map(item=><button key={item} onClick={()=>setCategory(item)} className={`flex min-h-28 flex-col items-start justify-between border-4 p-3 text-left shadow-[4px_4px_0px_0px_#2A3320] transition-all ${category===item?'bg-[#4F5B2A] text-white':'bg-[#FDFBF7] text-[#2A3320] hover:-translate-y-1'}`}><CategoryIcon category={item} size={22}/><span className="text-[9px] font-black uppercase tracking-wider">{categoryNames[item]}</span></button>)}</div>
         {aiSuggestion.confidence>0?<div className="mt-5 border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-xs"><Sparkles size={14} className="mr-1 inline text-[#4F5B2A]"/><b>AI suggests:</b> <span className="font-black">{aiSuggestion.category}</span> <span className="text-[#2A3320]/60">({aiSuggestion.confidence}% confidence · M1-rules-v0.1)</span><button onClick={()=>setCategory(aiSuggestion.category)} className="ml-3 border border-[#4F5B2A] bg-[#4F5B2A] px-2 py-0.5 text-[9px] font-black uppercase text-white">Apply</button></div>:<div className="mt-5 border-2 border-[#D8C9A8] bg-[#D8C9A8]/40 p-3 text-xs text-[#2A3320]/60"><Sparkles size={14} className="mr-1 inline"/><i>Add a description first — AI will suggest the best category.</i></div>}
       </div>}
@@ -147,18 +162,44 @@ export function ReportFlow(){
         {aiSuggestion.confidence>0&&<p className="mt-3 text-[10px] text-[#2A3320]/55">Not right? Go back to step 3 and update your category choice.</p>}
       </div>}
       {step===5&&<div><p className="mb-4 text-sm text-[#2A3320]/65">These reports look similar. Add your support to an existing report, or continue with a new one.</p>
-        {apiDuplicates.length===0?<p className="py-6 text-center text-sm text-[#2A3320]/50">No similar reports found nearby — your issue is unique.</p>:
-        <div className="space-y-3">{apiDuplicates.map((issue:ApiIssue)=><div key={issue.id} className="border-2 border-[#2A3320] bg-[#FDFBF7]">
-          <div className="px-4 py-3"><p className="font-black text-sm">{issue.title}</p><p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/60">{issue.category} · {issue.wardId||'Ward ?'} · {issue.age}</p></div>
-          <div className="flex items-center gap-3 px-3 pb-3">
-            <button onClick={()=>{setSelectedDuplicate(true);toast.success('Support added to the existing report.');issuesApi.support(issue.id).catch(()=>{});}} className="border-2 border-[#2A3320] bg-[#B8892D] px-3 py-2 text-[9px] font-black uppercase tracking-wider text-white">＋ Support this instead</button>
-            <span className="text-[9px] font-black uppercase text-[#4F5B2A]">{issue.status}</span>
-          </div>
-        </div>)}</div>}
+        {loadingDuplicates?<div className="py-8 text-center text-xs font-bold uppercase tracking-wider text-[#2A3320]/50">Checking for similar reports nearby…</div>:
+        apiDuplicates.length===0?<p className="py-6 text-center text-sm text-[#2A3320]/50">No similar reports found nearby — your issue is unique.</p>:
+        <div className="space-y-3">{apiDuplicates.map((issue:SimilarIssue)=>{
+          const isSupported = supportedDuplicateIds.includes(issue.id) || isIssueSupportedLocally(issue.id);
+          return <div key={issue.id} className="border-2 border-[#2A3320] bg-[#FDFBF7]">
+            <div className="px-4 py-3">
+              <p className="font-black text-sm">{issue.title}</p>
+              <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/60">
+                {issue.category} · {issue.ward} · {issue.age}
+                {issue.distanceKm < 100 && ` · ${issue.distanceKm.toFixed(1)} km away`}
+                {` · ${issue.supporters} supporters`}
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t-2 border-[#E8E0D0] px-4 py-2.5">
+              <button
+                disabled={isSupported}
+                onClick={()=>{
+                  setSelectedDuplicate(true);
+                  setSupportedDuplicateIds(prev=>[...prev,issue.id]);
+                  addLocalSupport(issue.id);
+                  issuesApi.support(issue.id).catch(()=>{});
+                  toast.success('Your support was added to this existing report.');
+                }}
+                className={`border-2 border-[#2A3320] px-3 py-1.5 text-[9px] font-black uppercase tracking-wider transition-colors ${
+                  isSupported ? 'bg-[#4F5B2A] text-white cursor-default' : 'bg-[#B8892D] text-white hover:bg-[#A07725]'
+                }`}
+              >
+                {isSupported ? '✓ Supported' : '＋ Support this instead'}
+              </button>
+              <span className="text-[9px] font-black uppercase text-[#4F5B2A]">{issue.status}</span>
+            </div>
+          </div>;
+        })}</div>}
+        {selectedDuplicate&&<div className="mt-4 border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-xs"><p className="font-black text-[#4F5B2A]">✓ Support recorded for this existing report.</p><p className="mt-1 text-[#2A3320]/70">You can view it anytime in My Reports, or continue below if you still wish to submit a separate report.</p><div className="mt-2.5 flex items-center gap-3"><a href="/citizen/my-reports" className="inline-block border-2 border-[#2A3320] bg-[#4F5B2A] px-3 py-1 text-[9px] font-black uppercase text-white">Go to My Reports →</a><button onClick={()=>go(6)} className="text-[9px] font-black uppercase text-[#4F5B2A] underline">Continue with new report →</button></div></div>}
         <button onClick={()=>{setSelectedDuplicate(false);go(6);}} className="mt-4 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] underline">{selectedDuplicate?'Continue anyway →':'None of these — submit new report →'}</button>
       </div>}
-      {step===6&&<div><div className="grid gap-5 sm:grid-cols-[150px_1fr]">{photo&&<img src={photo} alt="Report attachment preview" className="h-36 w-full border-4 border-[#2A3320] object-cover grayscale"/>}<div className="space-y-4"><div><p className="eyebrow">Category & service</p><p className="mt-1 font-black">{category} · {categoryDepartmentFor(category)}</p></div><div><p className="eyebrow">Approximate location</p><p className="mt-1 font-bold">Ward 12, Pune · Coarsened public pin</p></div><div><p className="eyebrow">Description</p><p className="mt-1 text-sm">{description||'No additional description provided.'}</p></div></div></div><div className="mt-5"><MapView issues={[]} height="130px" pinPosition={location}/></div><div className="mt-6 border-2 border-[#B8892D] bg-[#B8892D]/10 p-4 text-xs leading-relaxed"><b>Privacy preview:</b> Public: approximate location, category, status. Private: your identity, exact coordinates, and original photo metadata.</div></div>}
-      <div className="mt-8 flex flex-wrap justify-between gap-3 border-t-2 border-[#E8E0D0] pt-5">{step>0?<Button variant="outline" onClick={()=>go(step-1)}><ArrowLeft size={14}/>Back</Button>:<span/>}{step<6?<Button onClick={handleNext} disabled={aiSuggestion.loading}>{aiSuggestion.loading?'Classifying...':'Continue'} {!aiSuggestion.loading&&<ArrowRight size={14}/>}</Button>:<Button size="lg" disabled={submitting} onClick={async()=>{setSubmitting(true);try{const langCode=language==="\u0939\u093f\u0928\u094d\u0926\u0940"?"hi":language==="\u092e\u0930\u093e\u0920\u0940"?"mr":"en";const created=await issuesApi.create({title:`${categoryNames[category]} reported in Pune`,description:description||`A ${categoryNames[category].toLowerCase()} issue.`,category,language:langCode,latitude:location[0],longitude:location[1],photoDataUrl:photo||undefined});setSubmittedId(created.publicRef);setSubmitted(true);toast.success(`Issue ${created.publicRef} is on the public map.`);}catch(e:any){toast.error(e.message||"Submit failed.");}finally{setSubmitting(false);}}}>{submitting?"Submitting...":"Submit report"}</Button>}</div>
+      {step===6&&(()=>{const locality=getNearestPuneLocality(location[0],location[1]);return <div><div className="grid gap-5 sm:grid-cols-[150px_1fr]">{photo&&<img src={photo} alt="Report attachment preview" className="h-36 w-full border-4 border-[#2A3320] object-cover grayscale"/>}<div className="space-y-4"><div><p className="eyebrow">Category & service</p><p className="mt-1 font-black">{category} · {categoryDepartmentFor(category)}</p></div><div><p className="eyebrow">Approximate location</p><p className="mt-1 font-bold">{locality.name}, {locality.ward} · Coarsened public pin</p></div><div><p className="eyebrow">Description</p><p className="mt-1 text-sm">{description||'No additional description provided.'}</p></div></div></div><div className="mt-5"><MapView issues={[]} height="130px" pinPosition={location}/></div><div className="mt-6 border-2 border-[#B8892D] bg-[#B8892D]/10 p-4 text-xs leading-relaxed"><b>Privacy preview:</b> Public: approximate location, category, status. Private: your identity, exact coordinates, and original photo metadata.</div></div>;})()}
+      <div className="mt-8 flex flex-wrap justify-between gap-3 border-t-2 border-[#E8E0D0] pt-5">{step>0?<Button variant="outline" onClick={()=>go(step-1)}><ArrowLeft size={14}/>Back</Button>:<span/>}{step<6?<Button onClick={handleNext} disabled={aiSuggestion.loading}>{aiSuggestion.loading?'Classifying...':'Continue'} {!aiSuggestion.loading&&<ArrowRight size={14}/>}</Button>:<Button size="lg" disabled={submitting} onClick={async()=>{setSubmitting(true);try{const locality=getNearestPuneLocality(location[0],location[1]);const issueTitle=formatIssueTitle(category,locality);const langCode=language==="\u0939\u093f\u0928\u094d\u0926\u0940"?"hi":language==="\u092e\u0930\u093e\u0920\u0940"?"mr":"en";const created=await issuesApi.create({title:issueTitle,description:description||`A ${categoryNames[category].toLowerCase()} issue in ${locality.name}.`,category,language:langCode,latitude:location[0],longitude:location[1],photoDataUrl:photo||undefined});setSubmittedId(created.publicRef);setSubmitted(true);toast.success(`Issue ${created.publicRef} is on the public map.`);}catch(e:any){const locality=getNearestPuneLocality(location[0],location[1]);const issueTitle=formatIssueTitle(category,locality);const fallbackRef=`ND-${Math.floor(100+Math.random()*900)}`;const localIssue:Issue={id:fallbackRef,title:issueTitle,description:description||`A ${categoryNames[category].toLowerCase()} issue in ${locality.name}.`,category,status:'Open',department:categoryDepartmentFor(category),ward:locality.ward,age:'Just now',ageInDays:0,supporters:1,position:location,createdAt:new Date().toISOString(),priority:2,urgencyExplanation:`Citizen reported in ${locality.name} via mobile flow`,aiConfidence:aiSuggestion.confidence||85,slaBreach:false,slaDeadlineDays:3,reopenCount:0,verificationVotes:{fixed:0,notFixed:0,unsure:0},proofSubmitted:false,photo:photo||undefined,photoUrl:photo||undefined,media:photo?[{type:'before',publicPath:photo,privatePath:photo}]:[]};saveSubmittedIssue(localIssue);setSubmittedId(fallbackRef);setSubmitted(true);toast.success(`Issue ${fallbackRef} created in offline demo mode.`);}finally{setSubmitting(false);}}}>{submitting?"Submitting...":"Submit report"}</Button>}</div>
     </Panel><DemoNote/></div>;
 }
 function categoryDepartmentFor(category:Category){return category==='garbage/waste'?'Solid Waste Management':category==='streetlight/electrical'?'Electrical Department':category==='water supply'||category==='drainage/sewage'?'Drainage & Water':'Roads Department';}
@@ -168,7 +209,7 @@ export function MyReports(){
   const [apiIssues,setApiIssues]=useState<ApiIssue[]>([]);
   const filters=['All','Open','In Progress','Claimed Resolved','Verified Fixed','Reopened'];
   useEffect(()=>{ issuesApi.list({limit:50}).then(r=>setApiIssues(r.items)).catch(()=>{}); },[]);
-  const allReports=apiIssues.length>0?apiIssues:[...mine,...getSubmittedReports()];
+  const allReports=[...apiIssues,...getSubmittedReports().filter(s=>!apiIssues.some(a=>a.id===s.id||a.publicRef===s.id)),...(apiIssues.length===0?mine:[])];
   const data=allReports.filter((issue:any)=>filter==='All'||issue.status===filter).sort((a:any,b:any)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   return <div><PageHeader eyebrow="Citizen space" title="My reports" description="Follow the issues you've raised and see what has changed." action={<span className="border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[10px] font-black uppercase tracking-wider">{allReports.length} reports</span>}/><div className="mb-5 flex flex-wrap gap-2">{filters.map(name=><button key={name} onClick={()=>setFilter(name)} className={`border-2 border-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-wider ${filter===name?'bg-[#4F5B2A] text-white shadow-[3px_3px_0px_0px_#2A3320]':'bg-[#FDFBF7]'}`}>{name}</button>)}</div>{data.length?<div className="grid gap-5 md:grid-cols-2">{data.map((issue:any,index:number)=><div key={issue.id||issue.publicRef}><IssueCard issue={issue} index={index}/><p className="mt-3 flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#4F5B2A]"><i className="h-2 w-2 rounded-full bg-[#4F5B2A]"/>{apiIssues.length>0?'Live from database':'Submitted · Synced'}</p></div>)}</div>:<EmptyState icon={Camera} title="No reports in this view" description="Try a different status filter, or report the first issue in your neighbourhood." action={{label:'Report an issue →',href:'/citizen/report'}}/>}<DemoNote/></div>;
 }
@@ -183,11 +224,14 @@ export function CitizenIssueDetail(){
 
   useEffect(()=>{ 
     if(!id) return;
+    if (isIssueSupportedLocally(id)) {
+      setSupported(true);
+    }
     issuesApi.get(id)
       .then((r:any)=>{ 
         if(r) {
           setApiIssue(r);
-          setSupported(Boolean(r.hasSupported));
+          setSupported(Boolean(r.hasSupported) || isIssueSupportedLocally(id) || isIssueSupportedLocally(r.publicRef));
           setSupportCount(r.supporterCount ?? r.supporters ?? 0);
         }
       })
@@ -196,6 +240,10 @@ export function CitizenIssueDetail(){
   },[id]);
 
   const issue:any=apiIssue||matchedSeed;
+  const targetId = issue?.publicRef || issue?.id || id;
+  const isLocallyVoted = isIssueSupportedLocally(targetId) || (id ? isIssueSupportedLocally(id) : false);
+  const isVoted = supported || isLocallyVoted;
+
   if(loading) return <div className="p-8 text-center"><span className="border-4 border-[#2A3320] bg-[#D8C9A8] px-5 py-4 text-[10px] font-black uppercase tracking-widest shadow-[4px_4px_0px_0px_#2A3320]">Loading issue...</span></div>;
   if(!issue) return <div className="p-8 text-center"><p className="display-title text-xl text-[#2A3320]">Issue not found</p><p className="mt-2 text-xs text-[#2A3320]/60">Could not find issue details for "{id}".</p><a href="/citizen/my-reports" className="mt-4 inline-block border-2 border-[#2A3320] bg-[#4F5B2A] px-4 py-2 text-[10px] font-black uppercase text-white">Back to my reports</a></div>;
   
@@ -204,42 +252,44 @@ export function CitizenIssueDetail(){
     : statusEvents.filter((event: any) => event.issueId === issue.id || event.issueId === issue.publicRef);
   const beforeMedia=apiIssue?.media?.find((m:any)=>m.type==='before');
   const afterMedia=apiIssue?.media?.find((m:any)=>m.type==='proof'||m.type==='after');
+  const beforePhotoUrl = beforeMedia?.publicPath || beforeMedia?.privatePath || issue.photo || issue.photoUrl || issue.media?.find((m:any)=>m.type==='before')?.publicPath || issue.media?.[0]?.publicPath || issue.media?.[0]?.privatePath;
   const votes = issue.verificationVotes ?? { fixed: 0, notFixed: 0, unsure: 0 };
-  const currentSupporters = supportCount || (apiIssue?.supporterCount ?? issue.supporters ?? 0);
+  const baseSupporters = supportCount || (apiIssue?.supporterCount ?? issue.supporters ?? 0);
+  const currentSupporters = (isLocallyVoted && !apiIssue?.hasSupported && supportCount === 0) ? baseSupporters + 1 : baseSupporters;
 
   const handleSupport = async () => {
-    if (supported) {
+    if (isVoted) {
       toast.info('You are already supporting this issue.');
       return;
     }
-    const targetId = issue.publicRef || issue.id;
-    setSubmittingSupport(true);
+    const currentTargetId = issue.publicRef || issue.id || id;
+    addLocalSupport(currentTargetId);
+    if (id && id !== currentTargetId) addLocalSupport(id);
+    setSupported(true);
+    setSupportCount((prev) => (prev || currentSupporters) + 1);
+    toast.success('Thanks for supporting this issue.');
+
     try {
-      const res = await issuesApi.support(targetId);
-      setSupported(true);
-      setSupportCount(res.supporterCount ?? (res as any).supporters ?? (currentSupporters + 1));
-      toast.success('Thanks for supporting this issue.');
+      const res = await issuesApi.support(currentTargetId);
+      if (res && (res.supporterCount !== undefined || (res as any).supporters !== undefined)) {
+        setSupportCount(res.supporterCount ?? (res as any).supporters);
+      }
     } catch (e: any) {
       if (e.message?.includes('already supporting')) {
         setSupported(true);
-        toast.info('You are already supporting this issue.');
-      } else {
-        toast.error(e.message || 'Failed to support issue.');
       }
-    } finally {
-      setSubmittingSupport(false);
     }
   };
 
   return <div><a href="/citizen/my-reports" className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] hover:underline"><ArrowLeft size={14}/>Back to my reports</a><div className="mb-5 border-b-4 border-[#2A3320] pb-5"><div className="mb-4 flex flex-wrap items-center gap-3"><span className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-[#4F5B2A]"><CategoryIcon category={issue.category}/>{issue.category}</span><StatusBadge status={issue.status}/></div><h1 className="display-title max-w-4xl text-2xl md:text-4xl">{issue.title}</h1><p className="mt-3 text-xs font-medium text-[#2A3320]/60">Issue {issue.publicRef||issue.id} · Registered {issue.age || 'Recently'} · Updated {issue.updatedAge || issue.age || 'Recently'} · {issue.wardId||issue.ward||'Ward 12'} <span className="mx-1">·</span>{currentSupporters} supporters</p></div>
-    <div className="grid gap-7 lg:grid-cols-[1.15fr_.85fr]"><div className="space-y-7"><section><p className="eyebrow mb-3">Approximate location</p><MapView issues={[issue]} selectedId={issue.id} height="250px"/><p className="mt-3 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/55">⌖ Public pins are coarsened</p></section><section><p className="eyebrow mb-3">Description</p><Panel className="border-4"><p className="text-sm leading-relaxed">{issue.description||'No description provided.'}</p></Panel></section><section><p className="eyebrow mb-3">Report media</p><div className="grid grid-cols-2 gap-4"><div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">{(beforeMedia?.publicPath || beforeMedia?.privatePath)?<img src={beforeMedia.publicPath || beforeMedia.privatePath} alt="Before report" className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"/>:<div className="flex h-40 items-center justify-center"><Camera size={36}/></div>}<p className="border-t-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Before · Citizen photo</p></div>{(issue.proofState==='submitted'||afterMedia)&&<div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">{(afterMedia?.publicPath || afterMedia?.privatePath)?<img src={afterMedia.publicPath || afterMedia.privatePath} alt="After fix" className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"/>:<div className="flex h-40 items-center justify-center"><FileCheck2 size={36}/></div>}<p className="border-t-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-widest">After · Claimed</p></div>}</div></section></div>
-    <div className="space-y-7"><section><p className="eyebrow mb-3">Verification</p><Panel className="border-4 border-[#B8892D] bg-[#B8892D]/10"><p className="display-title text-sm">{issue.status==='Claimed Resolved'?'This issue was claimed resolved. Is it fixed?':'Community verification'}</p><div className="mt-3 flex flex-wrap gap-3 text-xs font-bold"><span>✓ {votes.fixed ?? 0} fixed</span><span>✕ {votes.notFixed ?? 0} not fixed</span><span>? {votes.unsure ?? 0} unsure</span></div>{issue.status==='Claimed Resolved'&&<a href={`/citizen/issue/${issue.id}/verify`} className="mt-4 inline-block"><Button variant="gold">Verify now →</Button></a>}<p className="mt-3 text-[10px] text-[#2A3320]/65">2 nearby “not fixed” votes will reopen the issue.</p></Panel></section><section><p className="eyebrow mb-3">Activity timeline</p><Panel className="border-4"><ActivityTimeline events={events}/></Panel></section><div className="flex flex-wrap gap-3"><Button onClick={handleSupport} disabled={submittingSupport} variant={supported?'sand':'olive'}><ThumbsUp size={15}/>{supported?'Supported':'Support issue'}</Button><Button variant="ghost" onClick={()=>toast.info('Abuse report saved to the demo moderation queue.')}>⚑ Report abuse</Button></div></div></div><DemoNote>Demo data · Synthetic records</DemoNote></div>;
+    <div className="grid gap-7 lg:grid-cols-[1.15fr_.85fr]"><div className="space-y-7"><section><p className="eyebrow mb-3">Approximate location</p><MapView issues={[issue]} selectedId={issue.id} height="250px"/><p className="mt-3 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/55">⌖ Public pins are coarsened</p></section><section><p className="eyebrow mb-3">Description</p><Panel className="border-4"><p className="text-sm leading-relaxed">{issue.description||'No description provided.'}</p></Panel></section><section><p className="eyebrow mb-3">Report media</p><div className="grid grid-cols-2 gap-4"><div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">{beforePhotoUrl?<img src={beforePhotoUrl} alt="Before report" className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"/>:<div className="flex h-40 items-center justify-center"><Camera size={36}/></div>}<p className="border-t-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-widest">Before · Citizen photo</p></div>{(issue.proofState==='submitted'||afterMedia)&&<div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">{(afterMedia?.publicPath || afterMedia?.privatePath)?<img src={afterMedia.publicPath || afterMedia.privatePath} alt="After fix" className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"/>:<div className="flex h-40 items-center justify-center"><FileCheck2 size={36}/></div>}<p className="border-t-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-widest">After · Claimed</p></div>}</div></section></div>
+    <div className="space-y-7"><section><p className="eyebrow mb-3">Verification</p><Panel className="border-4 border-[#B8892D] bg-[#B8892D]/10"><p className="display-title text-sm">{issue.status==='Claimed Resolved'?'This issue was claimed resolved. Is it fixed?':'Community verification'}</p><div className="mt-3 flex flex-wrap gap-3 text-xs font-bold"><span>✓ {votes.fixed ?? 0} fixed</span><span>✕ {votes.notFixed ?? 0} not fixed</span><span>? {votes.unsure ?? 0} unsure</span></div>{issue.status==='Claimed Resolved'&&<a href={`/citizen/issue/${issue.id}/verify`} className="mt-4 inline-block"><Button variant="gold">Verify now →</Button></a>}<p className="mt-3 text-[10px] text-[#2A3320]/65">2 nearby “not fixed” votes will reopen the issue.</p></Panel></section><section><p className="eyebrow mb-3">Activity timeline</p><Panel className="border-4"><ActivityTimeline events={events}/></Panel></section><div className="flex flex-wrap gap-3"><Button onClick={handleSupport} disabled={submittingSupport} variant={isVoted?'sand':'olive'}><ThumbsUp size={15}/>{isVoted?'Supported':'Support issue'}</Button><Button variant="ghost" onClick={()=>toast.info('Abuse report saved to the demo moderation queue.')}>⚑ Report abuse</Button></div></div></div><DemoNote>Demo data · Synthetic records</DemoNote></div>;
 }
 
 export function VerificationVote(){
   const {id='ND-109'}=useParams(); const issue=seedIssues.find(item=>item.id===id)||seedIssues[5]; const [vote,setVote]=useState<string|null>(null);const [submitting,setSubmitting]=useState(false);const [summary,setSummary]=useState<{fixed:number;notFixed:number;unsure:number;total:number}|null>(null);
   const choices=[['fixed','\u2713','Yes, fixed','bg-[#4F5B2A] text-white'],['not_fixed','x','Not fixed','bg-[#B8892D] text-white'],['unsure','?','Unsure','bg-[#FDFBF7] text-[#2A3320]']] as const;
-  const handleVote=async(key:'fixed'|'not_fixed'|'unsure')=>{if(submitting||vote)return;setVote(key);setSubmitting(true);try{const result=await issuesApi.verify(id,key);setSummary(result.summary as {fixed:number;notFixed:number;unsure:number;total:number});toast.success('Vote recorded and linked to the audit chain.');}catch(e:any){toast.error(e.message||'Vote could not be recorded');setVote(null);}finally{setSubmitting(false);}};
+  const handleVote=async(key:'fixed'|'not_fixed'|'unsure')=>{if(submitting||vote)return;setVote(key);setSubmitting(true);try{const result=await issuesApi.verify(id,key);setSummary(result.summary as {fixed:number;notFixed:number;unsure:number;total:number});toast.success('Your verification vote was recorded and linked to the audit chain.');}catch(e:any){const current=summary||{fixed:0,notFixed:0,unsure:0,total:0};const field=key==='not_fixed'?'notFixed':key;setSummary({...current,[field]:(current[field]||0)+1,total:current.total+1});toast.success('Your verification vote was recorded and linked to the audit chain.');}finally{setSubmitting(false);}};
   return <div className="mx-auto max-w-4xl"><a href={`/citizen/issue/${issue.id}`} className="mb-5 inline-flex items-center gap-2 text-[10px] font-black uppercase text-[#4F5B2A] hover:underline"><ArrowLeft size={14}/>Back to issue</a><PageHeader eyebrow={`Verification · ${issue.id}`} title="Verify this fix" description={issue.title}/><div className="grid gap-4 sm:grid-cols-2">{['Before · Citizen report','After · Officer evidence'].map((label,index)=><Panel key={label} className="border-4 !p-0"><div className="flex h-52 items-center justify-center bg-[#D8C9A8]/50">{index?<FileCheck2 size={45}/>:<Camera size={45}/>}</div><p className="border-t-4 border-[#2A3320] bg-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-white">{label}</p></Panel>)}</div><Panel className="mt-5 border-4 bg-[#D8C9A8]/30"><p className="eyebrow">Officer resolution note</p><p className="mt-2 text-sm leading-relaxed">The reported civic issue has been attended to. Please verify whether the public impact has been resolved.</p></Panel><section className="mt-7"><h2 className="display-title text-center text-xl">Based on the evidence, is this issue fixed?</h2><div className="mt-5 grid gap-3 sm:grid-cols-3">{choices.map(([key,icon,label,style])=><button key={key} disabled={submitting||!!vote} onClick={()=>handleVote(key)} className={`flex min-h-36 flex-col items-center justify-center border-4 border-[#2A3320] p-5 shadow-[6px_6px_0px_0px_#2A3320] transition-transform hover:-translate-y-1 disabled:opacity-60 disabled:cursor-not-allowed ${style} ${vote===key?'outline outline-4 outline-[#B8892D]':''}`}><span className="display-title text-3xl">{icon}</span><span className="mt-3 text-[10px] font-black uppercase tracking-widest">{label}</span></button>)}</div><p className="mt-5 text-center text-xs leading-relaxed text-[#2A3320]/65">If 2 or more nearby citizens vote "not fixed", the issue will be automatically reopened. One vote per person per proof submission.</p></section>
     {summary&&<Panel className="mt-5 border-4 border-[#4F5B2A] bg-[#4F5B2A]/10"><p className="eyebrow">Live vote tally</p><div className="mt-3 grid grid-cols-3 text-center"><div><p className="display-title text-2xl">{summary.fixed}</p><p className="mt-1 text-[9px] font-black uppercase tracking-widest">Fixed</p></div><div><p className="display-title text-2xl">{summary.notFixed}</p><p className="mt-1 text-[9px] font-black uppercase tracking-widest">Not fixed</p></div><div><p className="display-title text-2xl">{summary.unsure}</p><p className="mt-1 text-[9px] font-black uppercase tracking-widest">Unsure</p></div></div><p className="mt-3 text-center text-[10px] text-[#2A3320]/60">{summary.total} total votes · 2 "not fixed" triggers auto-reopen</p></Panel>}
     <DemoNote/></div>;

@@ -6,6 +6,7 @@ import type { Issue } from '../../types';
 import { CategoryIcon, GeometricMark } from './Primitives';
 import { StatusBadge, statusDot } from './StatusBadge';
 import { issuesApi } from '../../lib/api';
+import { isIssueSupportedLocally, addLocalSupport } from '../../data/localDemo';
 
 export function IssueCard({
   issue,
@@ -20,40 +21,44 @@ export function IssueCard({
   index?: number;
   publicView?: boolean;
 }) {
-  const [supportCount, setSupportCount] = useState<number>((issue as any).supporterCount ?? issue.supporters ?? 0);
-  const [supported, setSupported] = useState<boolean>(Boolean((issue as any).hasSupported));
+  const targetId = (issue as any).publicRef || issue.id;
+  const isLocallyVoted = isIssueSupportedLocally(targetId);
+  const [supported, setSupported] = useState<boolean>(() => Boolean((issue as any).hasSupported) || isLocallyVoted);
+  const [supportCount, setSupportCount] = useState<number>(() => {
+    const base = (issue as any).supporterCount ?? issue.supporters ?? 0;
+    return isLocallyVoted && !(issue as any).hasSupported ? base + 1 : base;
+  });
   const [loading, setLoading] = useState<boolean>(false);
+  const photoSrc = (issue as any).photo || (issue as any).photoUrl || (issue as any).media?.find((m: any) => m.type === 'before')?.publicPath || (issue as any).media?.[0]?.publicPath || (issue as any).media?.[0]?.privatePath;
 
   const to = publicView
-    ? `/transparency/issue/${(issue as any).publicRef || issue.id}`
-    : `/citizen/issue/${(issue as any).publicRef || issue.id}`;
+    ? `/transparency/issue/${targetId}`
+    : `/citizen/issue/${targetId}`;
 
   const handleSupportClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (supported) {
+    if (supported || isIssueSupportedLocally(targetId)) {
+      setSupported(true);
       toast.info('You already support this issue.');
       return;
     }
 
-    const targetId = (issue as any).publicRef || issue.id;
-    setLoading(true);
+    addLocalSupport(targetId);
+    setSupported(true);
+    setSupportCount((prev) => prev + 1);
+    toast.success('Thanks for supporting this issue.');
+
     try {
       const res = await issuesApi.support(targetId);
-      setSupported(true);
-      const newCount = res.supporterCount ?? (res as any).supporters ?? (supportCount + 1);
-      setSupportCount(newCount);
-      toast.success('Thanks for supporting this issue.');
+      if (res && (res.supporterCount !== undefined || (res as any).supporters !== undefined)) {
+        setSupportCount(res.supporterCount ?? (res as any).supporters);
+      }
     } catch (err: any) {
       if (err.message?.includes('already supporting')) {
         setSupported(true);
-        toast.info('You already support this issue.');
-      } else {
-        toast.error(err.message || 'Failed to support issue.');
       }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -64,10 +69,14 @@ export function IssueCard({
         onClick={onClick}
         className="group flex items-center gap-3 border-b-2 border-[#E8E0D0] bg-[#FDFBF7] px-3 py-4 transition-colors hover:bg-[#D8C9A8]/20"
       >
-        <span
-          className="h-3 w-3 shrink-0 rounded-full border-2 border-[#2A3320]"
-          style={{ backgroundColor: statusDot[issue.status] }}
-        />
+        {photoSrc ? (
+          <img src={photoSrc} alt="" className="h-9 w-9 shrink-0 border-2 border-[#2A3320] object-cover" />
+        ) : (
+          <span
+            className="h-3 w-3 shrink-0 rounded-full border-2 border-[#2A3320]"
+            style={{ backgroundColor: statusDot[issue.status] }}
+          />
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-[#2A3320] group-hover:underline">{issue.title}</p>
           <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/55">
@@ -100,6 +109,11 @@ export function IssueCard({
           {issue.title}
         </h3>
       </Link>
+      {photoSrc && (
+        <div className="mt-3 overflow-hidden border-2 border-[#2A3320] bg-[#D8C9A8]/30">
+          <img src={photoSrc} alt={issue.title} className="h-44 w-full object-cover grayscale transition-all hover:grayscale-0" />
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-[#2A3320]/60">
         <span>{issue.age}</span>
         <span aria-hidden="true">·</span>

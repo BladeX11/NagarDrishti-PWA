@@ -1,5 +1,5 @@
 import { db } from '../db/index.js';
-import { verificationVotes, issues } from '../db/schema.js';
+import { verificationVotes, issues, users } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
 import { workflowService } from './workflowService.js';
 
@@ -30,14 +30,26 @@ export const verificationService = {
 
     const resolvedIssueId = issue.id;
 
-    // 2. Check for existing vote (one per user per proof version)
+    // 2. Resolve userId if demo or non-uuid string
+    const isUserUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+    let resolvedUserId = userId;
+    if (!isUserUuid) {
+      try {
+        const [u] = await db.select().from(users).where(eq(users.role, 'citizen')).limit(1);
+        resolvedUserId = u ? u.id : '00000000-0000-0000-0000-000000000001';
+      } catch {
+        resolvedUserId = '00000000-0000-0000-0000-000000000001';
+      }
+    }
+
+    // 3. Check for existing vote (one per user per proof version)
     const existing = await db
       .select()
       .from(verificationVotes)
       .where(
         and(
           eq(verificationVotes.issueId, resolvedIssueId),
-          eq(verificationVotes.userId, userId),
+          eq(verificationVotes.userId, resolvedUserId),
           eq(verificationVotes.proofVersion, proofVersion)
         )
       );
@@ -46,18 +58,18 @@ export const verificationService = {
       throw new Error('You have already voted on this proof submission');
     }
 
-    // 3. Insert vote
+    // 4. Insert vote
     const [newVote] = await db
       .insert(verificationVotes)
       .values({
         issueId: resolvedIssueId,
-        userId,
+        userId: resolvedUserId,
         vote,
         proofVersion,
       })
       .returning();
 
-    // 4. Check thresholds for auto-transitions
+    // 5. Check thresholds for auto-transitions
     await this.checkThresholds(resolvedIssueId);
 
     return newVote;
