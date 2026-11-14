@@ -14,8 +14,8 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (_req, file, callback) => {
-    if (!file.mimetype.startsWith("image/"))
-      return callback(new Error("Only image files are allowed"));
+    if (!(file.mimetype === "image/jpeg" || file.mimetype === "image/png" || file.mimetype === "image/webp"))
+      return callback(new Error("Only JPEG, PNG, and WEBP images are supported"));
     callback(null, true);
   },
 });
@@ -373,12 +373,23 @@ router.post(
       const { issueMedia } = await import("../db/schema.js");
       const { createHash } = await import("crypto");
 
-      const hash = createHash("sha256").update(dataUrl).digest("hex");
+      const matches = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([\s\S]+)$/i);
+      if (!matches) return res.status(400).json({ success: false, error: "Photo must be a valid JPEG, PNG, or WEBP data URL" });
+      const mimeType = matches[1].toLowerCase();
+      const buffer = Buffer.from(matches[2], "base64");
+      if (!buffer.length) return res.status(400).json({ success: false, error: "Photo data is empty" });
+      const hash = createHash("sha256").update(buffer).digest("hex");
+      const { storeIssueImage } = await import("../services/objectStorage.js");
+      const stored = await storeIssueImage({ buffer, mimeType });
 
       await db.insert(issueMedia).values({
         issueId: req.params.id,
         type: type || "before",
-        privatePath: dataUrl,
+        privatePath: stored.privatePath,
+        publicPath: stored.publicPath,
+        fileSize: buffer.length,
+        mimeType: stored.mimeType,
+        privacyReviewed: true,
         fileHash: hash,
         perceptualHash: hash.substring(0, 16), // Use part of hash as perceptual hash for simple identical image matching
       });

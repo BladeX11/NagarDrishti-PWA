@@ -1164,9 +1164,9 @@ export function CitizenIssueDetail() {
             <p className="eyebrow mb-3">Report media</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">
-                {beforeMedia?.publicPath || beforeMedia?.privatePath ? (
+                  {beforeMedia?.publicPath ? (
                   <img
-                    src={beforeMedia.publicPath || beforeMedia.privatePath}
+                      src={beforeMedia.publicPath}
                     alt="Before report"
                     className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"
                   />
@@ -1181,9 +1181,9 @@ export function CitizenIssueDetail() {
               </div>
               {(issue.proofState === "submitted" || afterMedia) && (
                 <div className="overflow-hidden border-4 border-[#2A3320] bg-[#D8C9A8]">
-                  {afterMedia?.publicPath || afterMedia?.privatePath ? (
+                  {afterMedia?.publicPath ? (
                     <img
-                      src={afterMedia.publicPath || afterMedia.privatePath}
+                      src={afterMedia.publicPath}
                       alt="After fix"
                       className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"
                     />

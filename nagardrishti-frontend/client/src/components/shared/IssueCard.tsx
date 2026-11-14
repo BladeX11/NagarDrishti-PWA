@@ -6,6 +6,7 @@ import { StatusBadge, statusDot } from './StatusBadge';
 
 export function IssueCard({ issue, variant = 'full', onClick, index = 0, publicView = false }: { issue: Issue; variant?: 'compact' | 'full'; onClick?: () => void; index?: number; publicView?: boolean }) {
   const to = publicView ? `/transparency/issue/${(issue as any).publicRef || issue.id}` : `/citizen/issue/${(issue as any).publicRef || issue.id}`;
+  const photo = (issue as any).media?.find((item: any) => item.type === 'before' && item.publicPath)?.publicPath as string | undefined;
   if (variant === 'compact') {
     return (
       <Link to={to} onClick={onClick} className="group flex items-center gap-3 border-b-2 border-[#E8E0D0] bg-[#FDFBF7] px-3 py-4 transition-colors hover:bg-[#D8C9A8]/20">
@@ -34,6 +35,7 @@ export function IssueCard({ issue, variant = 'full', onClick, index = 0, publicV
         <span>{issue.age}</span><span aria-hidden="true">·</span><span className="flex items-center gap-1"><Users size={13} />{(issue as any).supporterCount ?? issue.supporters} supporters</span><span aria-hidden="true">·</span><span>{issue.wardId||issue.ward}</span>
       </div>
       <p className="mt-4 line-clamp-2 text-sm leading-relaxed text-[#2A3320]/80">{issue.description}</p>
+      {photo && <img src={photo} alt="Citizen report photo" loading="lazy" className="mt-4 max-h-48 w-full border-2 border-[#2A3320] object-cover" />}
       <div className="mt-5 flex items-center justify-between gap-3 border-t-2 border-[#E8E0D0] pt-4">
         <Link to={to} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-[#4F5B2A] hover:underline">View timeline <ArrowUpRight size={14} /></Link>
         {!publicView && <button type="button" onClick={onClick} className="inline-flex items-center gap-1 border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[10px] font-black uppercase tracking-wider text-[#2A3320] shadow-[3px_3px_0px_0px_#2A3320] transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"><span aria-hidden="true">＋</span>Support</button>}

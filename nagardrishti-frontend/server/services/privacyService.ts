@@ -42,6 +42,17 @@ function redactMedia(media: unknown) {
   });
 }
 
+function removePrivateMediaPaths(issue: Record<string, unknown>) {
+  if (!Array.isArray(issue.media)) return issue;
+  return {
+    ...issue,
+    media: issue.media.map((item: Record<string, unknown>) => {
+      const { privatePath: _privatePath, ...safeMedia } = item;
+      return safeMedia;
+    }),
+  };
+}
+
 function encodeGeohash(lat: number, lng: number, precision: number = 6): string {
   let isEven = true;
   let latMin = -90, latMax = 90;
@@ -154,6 +165,7 @@ export const privacyService = {
   forViewer(issue: Record<string, unknown>, viewer: IssueViewer) {
     const isStaff = viewer?.role === 'officer' || viewer?.role === 'admin';
     const isReporter = viewer?.role === 'citizen' && viewer.id === issue.reporterId;
-    return isStaff || isReporter ? issue : this.redactForPublic(issue);
+    const response = removePrivateMediaPaths(issue);
+    return isStaff || isReporter ? response : this.redactForPublic(response);
   },
 };

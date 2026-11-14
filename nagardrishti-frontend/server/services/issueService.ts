@@ -6,7 +6,7 @@ import {
   verificationVotes,
   statusEvents,
 } from "../db/schema.js";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { privacyService } from "./privacyService.js";
 import { auditService } from "./auditService.js";
 import { priorityService } from "./priorityService.js";
@@ -45,6 +45,7 @@ export const issueService = {
       latitude: number;
       longitude: number;
       photoDataUrl?: string;
+      photo?: { buffer: Buffer; mimeType: string };
     },
     reporterId: string
   ) {
@@ -55,48 +56,39 @@ export const issueService = {
     let mimeType: string | null = null;
     let fileSize: number | null = null;
 
-    if (data.photoDataUrl) {
+    if (data.photoDataUrl || data.photo) {
       const { createHash } = await import("crypto");
-
-      const matches = data.photoDataUrl.match(
-        /^data:([A-Za-z-+\/]+);base64,(.+)$/
-      );
-      if (matches) {
-        mimeType = matches[1];
-        const buffer = Buffer.from(matches[2], "base64");
-        fileSize = buffer.length;
-        fileHash = createHash("sha256").update(buffer).digest("hex");
-        perceptualHash = fileHash.substring(0, 16);
-
-        const existingMedia = await db
-          .select()
-          .from(issueMedia)
-          .where(eq(issueMedia.fileHash, fileHash));
-        if (existingMedia.length > 0) {
-          throw new Error(
-            "An identical image has already been submitted for another issue."
-          );
-        }
-
-        const ext =
-          mimeType === "image/png"
-            ? "png"
-            : mimeType === "image/webp"
-              ? "webp"
-              : "jpg";
-        const stored = await storeIssueImage({
-          buffer,
-          mimeType,
-          extension: ext,
-        });
-        storedMediaPath = stored.privatePath;
-        publicMediaPath = stored.publicPath;
+      let buffer: Buffer;
+      if (data.photo) {
+        ({ buffer, mimeType } = data.photo);
       } else {
-        fileHash = createHash("sha256").update(data.photoDataUrl).digest("hex");
-        perceptualHash = fileHash.substring(0, 16);
-        storedMediaPath = data.photoDataUrl;
-        publicMediaPath = data.photoDataUrl;
+        const matches = data.photoDataUrl!.match(
+          /^data:(image\/(?:jpeg|png|webp));base64,([\s\S]+)$/i
+        );
+        if (!matches) throw new Error("Photo must be a valid JPEG, PNG, or WEBP data URL");
+        mimeType = matches[1].toLowerCase();
+        buffer = Buffer.from(matches[2], "base64");
+        if (!buffer.length) throw new Error("Photo data is empty");
       }
+
+      fileSize = buffer.length;
+      fileHash = createHash("sha256").update(buffer).digest("hex");
+      perceptualHash = fileHash.substring(0, 16);
+
+      const existingMedia = await db
+        .select()
+        .from(issueMedia)
+        .where(eq(issueMedia.fileHash, fileHash));
+      if (existingMedia.length > 0) {
+        throw new Error(
+          "An identical image has already been submitted for another issue."
+        );
+      }
+
+      const stored = await storeIssueImage({ buffer, mimeType });
+      storedMediaPath = stored.privatePath;
+      publicMediaPath = stored.publicPath;
+      mimeType = stored.mimeType;
     }
 
     // 1. Coarsen location for privacy
@@ -150,6 +142,7 @@ export const issueService = {
         perceptualHash,
         fileSize: fileSize ?? undefined,
         mimeType: mimeType ?? undefined,
+        privacyReviewed: true,
       });
     }
 
@@ -320,6 +313,27 @@ export const issueService = {
 
     const total = Number(countResult[0]?.count ?? 0);
 
+    const mediaRows = results.length
+      ? await db
+          .select({
+            id: issueMedia.id,
+            issueId: issueMedia.issueId,
+            type: issueMedia.type,
+            publicPath: issueMedia.publicPath,
+            mimeType: issueMedia.mimeType,
+            privacyReviewed: issueMedia.privacyReviewed,
+          })
+          .from(issueMedia)
+          .where(inArray(issueMedia.issueId, results.map(issue => issue.id)))
+      : [];
+    const mediaByIssue = new Map<string, typeof mediaRows>();
+    for (const media of mediaRows) {
+      if (!media.issueId) continue;
+      const issueMediaItems = mediaByIssue.get(media.issueId) ?? [];
+      issueMediaItems.push(media);
+      mediaByIssue.set(media.issueId, issueMediaItems);
+    }
+
     const items = results.map(issue => {
       const { age, ageInDays } = computeAge(issue.createdAt!);
       const updatedAge = computeAge(issue.updatedAt || issue.createdAt!).age;
@@ -327,6 +341,7 @@ export const issueService = {
         ...issue,
         latitude: issue.publicLat,
         longitude: issue.publicLng,
+        media: mediaByIssue.get(issue.id) ?? [],
         age,
         updatedAge,
         ageInDays,

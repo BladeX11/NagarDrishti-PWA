@@ -28,7 +28,7 @@ export function createApp(): Express {
   }));
 
   // Serve uploaded media files
-  const uploadsDir = path.resolve(process.cwd(), 'uploads');
+  const uploadsDir = path.resolve(process.cwd(), 'uploads', 'public');
   app.use('/uploads', express.static(uploadsDir));
 
   // Body Parsing Middleware

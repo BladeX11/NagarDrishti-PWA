@@ -146,7 +146,7 @@ export interface ApiIssue {
   ageInDays: number;
   reporterId?: string;
   events?: Array<{ id: string; fromStatus?: string; toStatus: string; actorRole: string; reason?: string; createdAt: string }>;
-  media?: Array<{ id: string; type: string; privatePath?: string; publicPath?: string; mimeType?: string }>;
+  media?: Array<{ id: string; type: string; publicPath?: string; mimeType?: string }>;
 }
 
 export interface ApiIssueList {

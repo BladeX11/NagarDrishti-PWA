@@ -107,6 +107,7 @@ temp/
 
 # Private citizen uploads
 uploads/private/
+uploads-private/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/

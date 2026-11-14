@@ -526,6 +526,7 @@ export function OfficerIssueDetail() {
     .filter(issue => issue.id !== base.id && issue.category === base.category)
     .slice(0, 2);
   const issue = { ...base, status, assignedOfficer: assigned };
+  const citizenPhoto = base.media?.find((item: any) => item.type === "before" && item.publicPath)?.publicPath;
   const allEvents = base.events?.length ? base.events : statusEvents.filter(event => event.issueId === base.id);
   const updateStatus = async () => {
     try {
@@ -608,11 +609,15 @@ export function OfficerIssueDetail() {
           <section>
             <p className="eyebrow mb-3">Evidence & location</p>
             <div className="grid gap-4 md:grid-cols-2">
-              <Panel className="flex min-h-52 flex-col items-center justify-center border-4 bg-[#D8C9A8]/40">
-                <CameraGlyph />
-                <p className="mt-4 text-[9px] font-black uppercase tracking-wider">
-                  Citizen photo · Private original
-                </p>
+              <Panel className="flex min-h-52 flex-col items-center justify-center overflow-hidden border-4 bg-[#D8C9A8]/40 p-0">
+                {citizenPhoto ? (
+                  <img src={citizenPhoto} alt="Citizen report photo" className="h-full min-h-52 max-h-80 w-full object-cover" />
+                ) : (
+                  <div className="flex min-h-52 flex-col items-center justify-center">
+                    <CameraGlyph />
+                    <p className="mt-4 text-[9px] font-black uppercase tracking-wider">No citizen photo</p>
+                  </div>
+                )}
               </Panel>
               <MapView issues={[base]} selectedId={base.id} height="210px" />
             </div>

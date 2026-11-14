@@ -80,10 +80,11 @@ describe('privacyService public issue responses', () => {
   ])('preserves fields the %s view currently needs', (_name, viewer) => {
     const response = privacyService.forViewer(issue, viewer);
 
-    expect(response).toBe(issue);
+    expect(response).not.toBe(issue);
     expect(response).toHaveProperty('privateLat', issue.privateLat);
     expect(response).toHaveProperty('reporterId', issue.reporterId);
-    expect(response.media?.[0]).toHaveProperty('privatePath');
+    expect(response.media?.[0]).not.toHaveProperty('privatePath');
+    expect(response.media?.[0]).toHaveProperty('publicPath', issue.media[0].publicPath);
   });
 
   it('allows only a reviewed derivative URL in public media', () => {
