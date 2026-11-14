@@ -81,6 +81,9 @@ export const authApi = {
       "/auth/me"
     );
   },
+  mode() {
+    return request<{ demoLoginEnabled: boolean }>("/auth/mode");
+  },
   logout() {
     clearRole();
     return request("/auth/logout", { method: "POST" });

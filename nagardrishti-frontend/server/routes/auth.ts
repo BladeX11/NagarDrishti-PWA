@@ -109,6 +109,15 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
+router.get('/mode', (_req, res) => {
+  res.json({
+    success: true,
+    data: {
+      demoLoginEnabled: process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEMO_LOGIN === 'true',
+    },
+  });
+});
+
 router.post('/login', async (req, res) => {
   try {
     if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_LOGIN !== 'true') return res.status(410).json({ success: false, error: 'Role-based login is disabled. Use OTP verification.' });

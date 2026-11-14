@@ -10,13 +10,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const developmentRoleLogin = import.meta.env.DEV;
+  const [demoLoginEnabled, setDemoLoginEnabled] = useState(import.meta.env.DEV);
 
   useEffect(() => {
-    authApi
-      .me()
-      .then(current => setUser(current))
-      .catch(() => undefined)
+    Promise.all([
+      authApi.me().catch(() => null),
+      authApi.mode().catch(() => ({ demoLoginEnabled: import.meta.env.DEV })),
+    ])
+      .then(([current, mode]) => {
+        setUser(current);
+        setDemoLoginEnabled(mode.demoLoginEnabled);
+      })
       .finally(() => setChecking(false));
   }, []);
   if (checking)
@@ -32,7 +36,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setBusy(true);
     setError("");
     try {
-      if (developmentRoleLogin) {
+      if (demoLoginEnabled) {
         const current = await authApi.login(role);
         setUser(current);
         return;
@@ -64,27 +68,29 @@ export function AuthGate({ children }: { children: ReactNode }) {
       >
         <p className="eyebrow">NagarDrishti secure access</p>
         <h1 className="display-title mt-2 text-3xl">
-          {developmentRoleLogin ? "Choose your workspace" : sent ? "Enter your code" : "Sign in with email"}
+          {demoLoginEnabled ? "Choose your workspace" : sent ? "Enter your code" : "Sign in with email"}
         </h1>
         <p className="mt-3 text-sm text-[#2A3320]/65">
-          {developmentRoleLogin
-            ? "Development mode: select a role to open the prototype dashboard."
+          {demoLoginEnabled
+            ? "Temporary demo access: select a role to open the dashboard. Email OTP verification will be added soon."
             : sent
             ? `We sent a six-digit code to ${destination}.`
             : "Use a verified identity to submit reports and receive status updates."}
         </p>
         {!sent && (
           <>
-            <label className="mt-6 block text-[10px] font-black uppercase tracking-wider">
-              Email address
-              <input
-                required
-                type="email"
-                value={destination}
-                onChange={event => setDestination(event.target.value)}
-                className="mt-2 w-full border-2 border-[#2A3320] bg-white px-3 py-3 outline-none"
-              />
-            </label>
+            {!demoLoginEnabled && (
+              <label className="mt-6 block text-[10px] font-black uppercase tracking-wider">
+                Email address
+                <input
+                  required
+                  type="email"
+                  value={destination}
+                  onChange={event => setDestination(event.target.value)}
+                  className="mt-2 w-full border-2 border-[#2A3320] bg-white px-3 py-3 outline-none"
+                />
+              </label>
+            )}
             <label className="mt-4 block text-[10px] font-black uppercase tracking-wider">
               Account type
               <select
@@ -123,7 +129,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         >
           {busy
             ? "Working…"
-            : developmentRoleLogin
+            : demoLoginEnabled
               ? "Enter dashboard"
               : sent
               ? "Verify and continue"
