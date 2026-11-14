@@ -29,10 +29,17 @@ export type IssueEvent = {
   timestamp?: string;
 };
 
+export type AuthUser = {
+  id: string;
+  role: string;
+  name: string;
+};
+
 async function request<T>(path: string, role?: 'citizen' | 'officer', options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-  if (role) headers.set('x-demo-role', role);
+  // Only send x-demo-role in development mode. Production rejects demo headers and enforces session cookies.
+  if (role && import.meta.env.DEV) headers.set('x-demo-role', role);
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' });
   const body = await response.json() as { success?: boolean; data?: T; error?: string };
   if (!response.ok || !body.success || body.data === undefined) {
@@ -42,6 +49,35 @@ async function request<T>(path: string, role?: 'citizen' | 'officer', options: R
 }
 
 export const liveApi = {
+  auth: {
+    async me() {
+      return request<AuthUser | null>('/auth/me');
+    },
+    async requestOtp(destination: string, channel: 'email' | 'sms' = 'email') {
+      return request<{ expiresInSeconds: number }>('/auth/request-otp', undefined, {
+        method: 'POST',
+        body: JSON.stringify({ destination, channel }),
+      });
+    },
+    async verifyOtp(destination: string, code: string, channel: 'email' | 'sms' = 'email', role = 'citizen', displayName?: string) {
+      return request<AuthUser>('/auth/verify-otp', undefined, {
+        method: 'POST',
+        body: JSON.stringify({ destination, code, channel, role, displayName }),
+      });
+    },
+    async login(role: 'citizen' | 'officer' | 'admin' | 'researcher') {
+      return request<AuthUser>('/auth/login', undefined, {
+        method: 'POST',
+        body: JSON.stringify({ role }),
+      });
+    },
+    async logout() {
+      return request<{ success: boolean }>('/auth/logout', undefined, {
+        method: 'POST',
+        body: '{}',
+      });
+    },
+  },
   async listIssues() {
     return request<{ items: LiveIssue[]; total: number; hasMore: boolean }>('/issues?page=1&limit=100');
   },
