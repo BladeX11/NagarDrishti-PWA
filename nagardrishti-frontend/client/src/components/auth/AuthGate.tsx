@@ -25,7 +25,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, []);
   if (checking)
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F5EFE3] text-[#2A3320]">
+      <div className="flex min-h-dvh items-center justify-center bg-[#F5EFE3] text-[#2A3320]">
         Loading secure session…
       </div>
     );
@@ -61,10 +61,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#F5EFE3] px-5 text-[#2A3320]">
+    <main className="flex min-h-dvh items-center justify-center bg-[#F5EFE3] px-4 py-6 text-[#2A3320] sm:px-5">
       <form
         onSubmit={submit}
-        className="w-full max-w-md border-4 border-[#2A3320] bg-[#FDFBF7] p-6 shadow-[8px_8px_0px_0px_#2A3320]"
+        className="w-full max-w-md border-2 border-[#2A3320] bg-[#FDFBF7] p-5 shadow-[5px_5px_0px_0px_#2A3320] sm:border-4 sm:p-6 sm:shadow-[8px_8px_0px_0px_#2A3320]"
       >
         <p className="eyebrow">NagarDrishti secure access</p>
         <h1 className="display-title mt-2 text-3xl">

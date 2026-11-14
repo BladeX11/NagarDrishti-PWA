@@ -76,12 +76,15 @@ import { adversarialService } from '../server/services/adversarialService.js';
 
 // ─── Test helpers ──────────────────────────────────────────────────────────── 
 function makeChain(terminalValues: Record<string, any> = {}) {
-  (db as any).select.mockReturnValue(db);
-  (db as any).from.mockReturnValue(db);
-  (db as any).where.mockReturnValue(db);
-  (db as any).orderBy.mockReturnValue(db);
-  (db as any).limit.mockResolvedValue(terminalValues.limit ?? []);
-  (db as any).where.mockResolvedValue(terminalValues.where ?? []);
+  (db as any).select.mockReset().mockReturnValue(db);
+  (db as any).from.mockReset().mockReturnValue(db);
+  (db as any).where.mockReset().mockResolvedValue(terminalValues.where ?? []);
+  (db as any).orderBy.mockReset().mockReturnValue(db);
+  (db as any).limit.mockReset().mockResolvedValue(terminalValues.limit ?? []);
+  (db as any).update.mockReset().mockReturnValue(db);
+  (db as any).set.mockReset().mockReturnValue(db);
+  (db as any).insert.mockReset().mockReturnValue(db);
+  (db as any).values.mockReset().mockResolvedValue([]);
 }
 
 // ─── Test Suite ───────────────────────────────────────────────────────────────
@@ -247,7 +250,9 @@ describe('adversarialService', () => {
     });
 
     it('does NOT flag if no Claimed Resolved event exists', async () => {
-      (db as any).where.mockResolvedValueOnce([{ createdAt: new Date(Date.now() - 48 * 3_600_000), category: 'pothole/road' }]);
+      (db as any).where
+        .mockResolvedValueOnce([{ createdAt: new Date(Date.now() - 48 * 3_600_000), category: 'pothole/road' }])
+        .mockReturnValueOnce(db);
       (db as any).limit.mockResolvedValueOnce([]);
       await adversarialService.checkTemporalImpossibility('iss-1');
       expect((db as any).values).not.toHaveBeenCalled();
@@ -257,9 +262,11 @@ describe('adversarialService', () => {
       const createdAt = new Date(Date.now() - 50 * 3_600_000); // 50 hours ago
       const resolvedAt = new Date(); // just now
       // pothole median = 120h; ratio = 50/120 ≈ 0.42 > 0.10 → no flag
-      (db as any).where.mockResolvedValueOnce([{ createdAt, category: 'pothole/road' }]);
+      (db as any).where
+        .mockResolvedValueOnce([{ createdAt, category: 'pothole/road' }])
+        .mockReturnValueOnce(db)
+        .mockResolvedValueOnce([]); // duplicate check never reached
       (db as any).limit.mockResolvedValueOnce([{ createdAt: resolvedAt }]);
-      (db as any).where.mockResolvedValueOnce([]); // duplicate check never reached
       await adversarialService.checkTemporalImpossibility('iss-1');
       expect((db as any).values).not.toHaveBeenCalled();
     });
@@ -268,9 +275,11 @@ describe('adversarialService', () => {
       const createdAt = new Date(Date.now() - 5 * 3_600_000); // 5 hours ago
       const resolvedAt = new Date(); // just now
       // pothole median = 120h; ratio = 5/120 ≈ 0.042 < 0.10 → flag
-      (db as any).where.mockResolvedValueOnce([{ createdAt, category: 'pothole/road' }]);
+      (db as any).where
+        .mockResolvedValueOnce([{ createdAt, category: 'pothole/road' }])
+        .mockReturnValueOnce(db)
+        .mockResolvedValueOnce([]); // no existing flag
       (db as any).limit.mockResolvedValueOnce([{ createdAt: resolvedAt }]);
-      (db as any).where.mockResolvedValueOnce([]); // no existing flag
 
       await adversarialService.checkTemporalImpossibility('iss-1');
       const call = (db as any).values.mock.calls[0][0];
@@ -284,9 +293,11 @@ describe('adversarialService', () => {
       const createdAt = new Date(Date.now() - 2 * 3_600_000); // 2 hours ago
       const resolvedAt = new Date();
       // fallback = 96h; ratio = 2/96 ≈ 0.021 < 0.10 → flag
-      (db as any).where.mockResolvedValueOnce([{ createdAt, category: 'unknowncategory' }]);
+      (db as any).where
+        .mockResolvedValueOnce([{ createdAt, category: 'unknowncategory' }])
+        .mockReturnValueOnce(db)
+        .mockResolvedValueOnce([]);
       (db as any).limit.mockResolvedValueOnce([{ createdAt: resolvedAt }]);
-      (db as any).where.mockResolvedValueOnce([]);
 
       await adversarialService.checkTemporalImpossibility('iss-1');
       const call = (db as any).values.mock.calls[0][0];
@@ -296,9 +307,11 @@ describe('adversarialService', () => {
     it('uses streetlight/electrical median (24h)', async () => {
       const createdAt = new Date(Date.now() - 1 * 3_600_000); // 1 hour ago — ratio = 1/24 ≈ 0.042 → flag
       const resolvedAt = new Date();
-      (db as any).where.mockResolvedValueOnce([{ createdAt, category: 'streetlight/electrical' }]);
+      (db as any).where
+        .mockResolvedValueOnce([{ createdAt, category: 'streetlight/electrical' }])
+        .mockReturnValueOnce(db)
+        .mockResolvedValueOnce([]);
       (db as any).limit.mockResolvedValueOnce([{ createdAt: resolvedAt }]);
-      (db as any).where.mockResolvedValueOnce([]);
 
       await adversarialService.checkTemporalImpossibility('iss-1');
       const call = (db as any).values.mock.calls[0][0];

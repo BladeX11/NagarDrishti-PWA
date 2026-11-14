@@ -18,11 +18,9 @@ vi.mock('../server/db/index.js', () => {
 
 describe('inactionService', () => {
   beforeEach(() => {
-    // Only reset call counts — do NOT reset implementations
     vi.clearAllMocks();
-    // Re-stub the terminal .orderBy and .where to return empty by default
-    (db as any).orderBy.mockResolvedValue([]);
-    (db as any).where.mockResolvedValue([]);
+    (db as any).orderBy.mockReset().mockResolvedValue([]);
+    (db as any).where.mockReset().mockReturnValue(db);
   });
 
   describe('computeTier', () => {

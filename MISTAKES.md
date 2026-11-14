@@ -47,3 +47,17 @@
 **Context:** `client/src/pages/citizen/CitizenPages.tsx` CitizenIssueDetail and `server/services/issueService.ts` getIssue
 **Solution:** Populated `verificationVotes` and `events` in `issueService.getIssue()` and added optional chaining with safe defaults (`issue.verificationVotes ?? { fixed: 0, notFixed: 0, unsure: 0 }`) in the frontend.
 **Date:** 2026-09-30
+
+
+### Vitest Mock Queue Leakage and Drizzle Chain `.where().orderBy()` Stubbing
+**Problem:** 14 unit tests failed in `adversarialService.test.ts` and `inactionService.test.ts` with `db.select(...).from(...).where(...).orderBy is not a function` and shifted `mockResolvedValueOnce` responses.
+**Context:** `tests/adversarialService.test.ts` and `tests/inactionService.test.ts`
+**Solution:** Used `.mockReset()` in `beforeEach` to flush unconsumed `mockResolvedValueOnce` queues between tests, and returned the mock `db` object on intermediate `.where()` calls that chain `.orderBy()`.
+**Date:** 2026-11-14
+
+
+### Dockerfile Missing `patches/` Directory for `pnpm install --frozen-lockfile`
+**Problem:** Docker build stage ran `pnpm install --frozen-lockfile` after copying only `package.json` and `pnpm-lock.yaml`, which fails when `package.json` references `"patchedDependencies": { "wouter@3.7.1": "patches/wouter@3.7.1.patch" }`.
+**Context:** `nagardrishti-frontend/Dockerfile` multi-stage build for Railway deployment.
+**Solution:** Added `COPY patches ./patches` before `RUN pnpm install --frozen-lockfile` in both `build` and `runtime` stages.
+**Date:** 2026-11-14
