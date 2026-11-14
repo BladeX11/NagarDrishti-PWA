@@ -9,6 +9,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const { queryResults } = vi.hoisted(() => ({ queryResults: [] as any[] }));
+
 // ─── Helpers under test (exported for testing) ───────────────────────────────
 // We test these by re-implementing them inline to validate the logic,
 // then test the service methods by mocking db accordingly.
@@ -42,13 +44,18 @@ vi.mock('../server/db/index.js', () => {
   chain.from = vi.fn().mockReturnValue(chain);
   chain.where = vi.fn().mockReturnValue(chain);
   chain.orderBy = vi.fn().mockReturnValue(chain);
-  chain.limit = vi.fn().mockResolvedValue([]);
+  chain.limit = vi.fn().mockReturnValue(chain);
   chain.update = vi.fn().mockReturnValue(chain);
   chain.set = vi.fn().mockReturnValue(chain);
   chain.insert = vi.fn().mockReturnValue(chain);
   chain.values = vi.fn().mockResolvedValue([]);
-  // Terminal .where also needs to support being awaited directly
-  chain.where.mockResolvedValue([]);
+  // Drizzle query builders are thenable; results are consumed once per query.
+  chain.then = (resolve: (value: any) => any, reject: (reason: any) => any) => {
+    const result = queryResults.shift();
+    return result instanceof Error
+      ? Promise.reject(result).then(resolve, reject)
+      : Promise.resolve(result ?? []).then(resolve, reject);
+  };
   return { db: chain };
 });
 
@@ -75,13 +82,20 @@ import { db } from '../server/db/index.js';
 import { adversarialService } from '../server/services/adversarialService.js';
 
 // ─── Test helpers ──────────────────────────────────────────────────────────── 
-function makeChain(terminalValues: Record<string, any> = {}) {
+function makeChain() {
   (db as any).select.mockReturnValue(db);
   (db as any).from.mockReturnValue(db);
   (db as any).where.mockReturnValue(db);
   (db as any).orderBy.mockReturnValue(db);
-  (db as any).limit.mockResolvedValue(terminalValues.limit ?? []);
-  (db as any).where.mockResolvedValue(terminalValues.where ?? []);
+  (db as any).limit.mockReturnValue(db);
+}
+
+function queueQueryResults(...results: any[]) {
+  queryResults.push(...results);
+}
+
+function queueQueryErrors(...errors: Error[]) {
+  queryResults.push(...errors);
 }
 
 // ─── Test Suite ───────────────────────────────────────────────────────────────
@@ -163,19 +177,20 @@ describe('Pure Math Helpers', () => {
 describe('adversarialService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryResults.length = 0;
     makeChain();
   });
 
   describe('Rule 1: checkPhotoReuse', () => {
     it('does NOT flag if media has no perceptualHash', async () => {
-      (db as any).where.mockResolvedValueOnce([{ id: 'm1', issueId: 'iss-1', perceptualHash: null, exifLat: null, exifLng: null, type: 'after' }]);
+      queueQueryResults([{ id: 'm1', issueId: 'iss-1', perceptualHash: null, exifLat: null, exifLng: null, type: 'after' }]);
       const insertSpy = (db as any).values;
       await adversarialService.checkPhotoReuse('m1', 'iss-1');
       expect(insertSpy).not.toHaveBeenCalled();
     });
 
     it('does NOT flag if media is not found', async () => {
-      (db as any).where.mockResolvedValueOnce([]);
+      queueQueryResults([]);
       const insertSpy = (db as any).values;
       await adversarialService.checkPhotoReuse('missing', 'iss-1');
       expect(insertSpy).not.toHaveBeenCalled();
@@ -183,12 +198,13 @@ describe('adversarialService', () => {
 
     it('does NOT flag if hamming distance > 8', async () => {
       // Media with a hash
-      (db as any).where
-        .mockResolvedValueOnce([{ id: 'm1', issueId: 'iss-1', perceptualHash: 'ffffffffffffffff', exifLat: null, exifLng: null }])
+      queueQueryResults(
+        [{ id: 'm1', issueId: 'iss-1', perceptualHash: 'ffffffffffffffff', exifLat: null, exifLng: null }],
         // Candidates with a very different hash
-        .mockResolvedValueOnce([{ id: 'm2', issueId: 'iss-2', perceptualHash: '0000000000000000' }])
+        [{ id: 'm2', issueId: 'iss-2', perceptualHash: '0000000000000000' }],
         // _insertFlag duplicate check → no existing flag
-        .mockResolvedValueOnce([]);
+        [],
+      );
       const insertSpy = (db as any).values;
       await adversarialService.checkPhotoReuse('m1', 'iss-1');
       expect(insertSpy).not.toHaveBeenCalled();
@@ -197,12 +213,13 @@ describe('adversarialService', () => {
     it('flags PHOTO_REUSE with severity HIGH when distance <= 4', async () => {
       const sameHash = '0000000000000000';
       // First call: fetch the media being checked
-      (db as any).where
-        .mockResolvedValueOnce([{ id: 'm1', issueId: 'iss-1', perceptualHash: sameHash, exifLat: null, exifLng: null }])
+      queueQueryResults(
+        [{ id: 'm1', issueId: 'iss-1', perceptualHash: sameHash, exifLat: null, exifLng: null }],
         // Second call: candidates
-        .mockResolvedValueOnce([{ id: 'm2', issueId: 'iss-2', perceptualHash: sameHash }])
+        [{ id: 'm2', issueId: 'iss-2', perceptualHash: sameHash }],
         // Third call: _insertFlag duplicate check
-        .mockResolvedValueOnce([]);
+        [],
+      );
 
       const insertSpy = (db as any).values;
       await adversarialService.checkPhotoReuse('m1', 'iss-1');
@@ -215,10 +232,11 @@ describe('adversarialService', () => {
 
     it('flags PHOTO_REUSE with severity MEDIUM when distance is 5-8', async () => {
       // distance 8: 0xf vs 0x0 in first 2 nibbles (4 bits each = 8 total)
-      (db as any).where
-        .mockResolvedValueOnce([{ id: 'm1', issueId: 'iss-1', perceptualHash: 'ff00000000000000', exifLat: null, exifLng: null }])
-        .mockResolvedValueOnce([{ id: 'm2', issueId: 'iss-2', perceptualHash: '0000000000000000' }])
-        .mockResolvedValueOnce([]);
+      queueQueryResults(
+        [{ id: 'm1', issueId: 'iss-1', perceptualHash: 'ff00000000000000', exifLat: null, exifLng: null }],
+        [{ id: 'm2', issueId: 'iss-2', perceptualHash: '0000000000000000' }],
+        [],
+      );
 
       await adversarialService.checkPhotoReuse('m1', 'iss-1');
       const call = (db as any).values.mock.calls[0][0];
@@ -228,11 +246,12 @@ describe('adversarialService', () => {
 
     it('does NOT insert duplicate flag if one already exists', async () => {
       const sameHash = 'abcdef0123456789';
-      (db as any).where
-        .mockResolvedValueOnce([{ id: 'm1', issueId: 'iss-1', perceptualHash: sameHash }])
-        .mockResolvedValueOnce([{ id: 'm2', issueId: 'iss-2', perceptualHash: sameHash }])
+      queueQueryResults(
+        [{ id: 'm1', issueId: 'iss-1', perceptualHash: sameHash }],
+        [{ id: 'm2', issueId: 'iss-2', perceptualHash: sameHash }],
         // _insertFlag: existing flag found
-        .mockResolvedValueOnce([{ id: 'flag-existing' }]);
+        [{ id: 'flag-existing' }],
+      );
 
       await adversarialService.checkPhotoReuse('m1', 'iss-1');
       expect((db as any).values).not.toHaveBeenCalled();
@@ -241,14 +260,13 @@ describe('adversarialService', () => {
 
   describe('Rule 2: checkTemporalImpossibility', () => {
     it('does NOT flag if issue not found', async () => {
-      (db as any).where.mockResolvedValueOnce([]);
+      queueQueryResults([]);
       await adversarialService.checkTemporalImpossibility('iss-1');
       expect((db as any).values).not.toHaveBeenCalled();
     });
 
     it('does NOT flag if no Claimed Resolved event exists', async () => {
-      (db as any).where.mockResolvedValueOnce([{ createdAt: new Date(Date.now() - 48 * 3_600_000), category: 'pothole/road' }]);
-      (db as any).limit.mockResolvedValueOnce([]);
+      queueQueryResults([{ createdAt: new Date(Date.now() - 48 * 3_600_000), category: 'pothole/road' }], []);
       await adversarialService.checkTemporalImpossibility('iss-1');
       expect((db as any).values).not.toHaveBeenCalled();
     });
@@ -257,9 +275,7 @@ describe('adversarialService', () => {
       const createdAt = new Date(Date.now() - 50 * 3_600_000); // 50 hours ago
       const resolvedAt = new Date(); // just now
       // pothole median = 120h; ratio = 50/120 ≈ 0.42 > 0.10 → no flag
-      (db as any).where.mockResolvedValueOnce([{ createdAt, category: 'pothole/road' }]);
-      (db as any).limit.mockResolvedValueOnce([{ createdAt: resolvedAt }]);
-      (db as any).where.mockResolvedValueOnce([]); // duplicate check never reached
+      queueQueryResults([{ createdAt, category: 'pothole/road' }], [{ createdAt: resolvedAt }]);
       await adversarialService.checkTemporalImpossibility('iss-1');
       expect((db as any).values).not.toHaveBeenCalled();
     });
@@ -268,9 +284,7 @@ describe('adversarialService', () => {
       const createdAt = new Date(Date.now() - 5 * 3_600_000); // 5 hours ago
       const resolvedAt = new Date(); // just now
       // pothole median = 120h; ratio = 5/120 ≈ 0.042 < 0.10 → flag
-      (db as any).where.mockResolvedValueOnce([{ createdAt, category: 'pothole/road' }]);
-      (db as any).limit.mockResolvedValueOnce([{ createdAt: resolvedAt }]);
-      (db as any).where.mockResolvedValueOnce([]); // no existing flag
+      queueQueryResults([{ createdAt, category: 'pothole/road' }], [{ createdAt: resolvedAt }], []);
 
       await adversarialService.checkTemporalImpossibility('iss-1');
       const call = (db as any).values.mock.calls[0][0];
@@ -284,9 +298,7 @@ describe('adversarialService', () => {
       const createdAt = new Date(Date.now() - 2 * 3_600_000); // 2 hours ago
       const resolvedAt = new Date();
       // fallback = 96h; ratio = 2/96 ≈ 0.021 < 0.10 → flag
-      (db as any).where.mockResolvedValueOnce([{ createdAt, category: 'unknowncategory' }]);
-      (db as any).limit.mockResolvedValueOnce([{ createdAt: resolvedAt }]);
-      (db as any).where.mockResolvedValueOnce([]);
+      queueQueryResults([{ createdAt, category: 'unknowncategory' }], [{ createdAt: resolvedAt }], []);
 
       await adversarialService.checkTemporalImpossibility('iss-1');
       const call = (db as any).values.mock.calls[0][0];
@@ -296,9 +308,7 @@ describe('adversarialService', () => {
     it('uses streetlight/electrical median (24h)', async () => {
       const createdAt = new Date(Date.now() - 1 * 3_600_000); // 1 hour ago — ratio = 1/24 ≈ 0.042 → flag
       const resolvedAt = new Date();
-      (db as any).where.mockResolvedValueOnce([{ createdAt, category: 'streetlight/electrical' }]);
-      (db as any).limit.mockResolvedValueOnce([{ createdAt: resolvedAt }]);
-      (db as any).where.mockResolvedValueOnce([]);
+      queueQueryResults([{ createdAt, category: 'streetlight/electrical' }], [{ createdAt: resolvedAt }], []);
 
       await adversarialService.checkTemporalImpossibility('iss-1');
       const call = (db as any).values.mock.calls[0][0];
@@ -308,32 +318,27 @@ describe('adversarialService', () => {
 
   describe('Rule 3: checkGpsMismatch', () => {
     it('does NOT flag if media has no EXIF GPS', async () => {
-      (db as any).where.mockResolvedValueOnce([{ id: 'm1', exifLat: null, exifLng: null }]);
+      queueQueryResults([{ id: 'm1', exifLat: null, exifLng: null }]);
       await adversarialService.checkGpsMismatch('iss-1', 'm1');
       expect((db as any).values).not.toHaveBeenCalled();
     });
 
     it('does NOT flag if media is not found', async () => {
-      (db as any).where.mockResolvedValueOnce([]);
+      queueQueryResults([]);
       await adversarialService.checkGpsMismatch('iss-1', 'missing');
       expect((db as any).values).not.toHaveBeenCalled();
     });
 
     it('does NOT flag if distance < 500m', async () => {
       // < 100m apart
-      (db as any).where
-        .mockResolvedValueOnce([{ id: 'm1', exifLat: 18.52, exifLng: 73.85 }])
-        .mockResolvedValueOnce([{ privateLat: 18.5204, privateLng: 73.85 }]);
+      queueQueryResults([{ id: 'm1', exifLat: 18.52, exifLng: 73.85 }], [{ privateLat: 18.5204, privateLng: 73.85 }]);
       await adversarialService.checkGpsMismatch('iss-1', 'm1');
       expect((db as any).values).not.toHaveBeenCalled();
     });
 
     it('flags GPS_MISMATCH with MEDIUM severity for 500-2000m', async () => {
       // ~1km apart: 18.52 vs 18.529 ≈ ~1000m
-      (db as any).where
-        .mockResolvedValueOnce([{ id: 'm1', exifLat: 18.52, exifLng: 73.85 }])
-        .mockResolvedValueOnce([{ privateLat: 18.529, privateLng: 73.85 }])
-        .mockResolvedValueOnce([]); // no existing flag
+      queueQueryResults([{ id: 'm1', exifLat: 18.52, exifLng: 73.85 }], [{ privateLat: 18.529, privateLng: 73.85 }], []);
 
       await adversarialService.checkGpsMismatch('iss-1', 'm1');
       const call = (db as any).values.mock.calls[0][0];
@@ -343,10 +348,7 @@ describe('adversarialService', () => {
 
     it('flags GPS_MISMATCH with HIGH severity for > 2000m', async () => {
       // ~18km apart
-      (db as any).where
-        .mockResolvedValueOnce([{ id: 'm1', exifLat: 18.52, exifLng: 73.85 }])
-        .mockResolvedValueOnce([{ privateLat: 18.68, privateLng: 73.85 }])
-        .mockResolvedValueOnce([]);
+      queueQueryResults([{ id: 'm1', exifLat: 18.52, exifLng: 73.85 }], [{ privateLat: 18.68, privateLng: 73.85 }], []);
 
       await adversarialService.checkGpsMismatch('iss-1', 'm1');
       const call = (db as any).values.mock.calls[0][0];
@@ -354,10 +356,7 @@ describe('adversarialService', () => {
     });
 
     it('does NOT store issue private coordinates in flag details (privacy)', async () => {
-      (db as any).where
-        .mockResolvedValueOnce([{ id: 'm1', exifLat: 18.52, exifLng: 73.85 }])
-        .mockResolvedValueOnce([{ privateLat: 18.68, privateLng: 73.85 }])
-        .mockResolvedValueOnce([]);
+      queueQueryResults([{ id: 'm1', exifLat: 18.52, exifLng: 73.85 }], [{ privateLat: 18.68, privateLng: 73.85 }], []);
 
       await adversarialService.checkGpsMismatch('iss-1', 'm1');
       const details = (db as any).values.mock.calls[0][0].details;
@@ -373,7 +372,7 @@ describe('adversarialService', () => {
   describe('Rule 4: checkBulkClosureAnomaly', () => {
     it('does NOT flag when officer has < 5 closures today', async () => {
       // 3 closures today — below minimum threshold
-      (db as any).where.mockResolvedValueOnce([
+      queueQueryResults([
         { actorId: 'officer-1', issueId: 'i1', createdAt: new Date() },
         { actorId: 'officer-1', issueId: 'i2', createdAt: new Date() },
         { actorId: 'officer-1', issueId: 'i3', createdAt: new Date() },
@@ -384,20 +383,21 @@ describe('adversarialService', () => {
 
     it('does NOT flag when officer has fewer than 5 days of history', async () => {
       // 5 closures today but only 3 days of history
-      (db as any).where
-        .mockResolvedValueOnce([
+      queueQueryResults(
+        [
           { actorId: 'officer-1', issueId: 'i1', createdAt: new Date() },
           { actorId: 'officer-1', issueId: 'i2', createdAt: new Date() },
           { actorId: 'officer-1', issueId: 'i3', createdAt: new Date() },
           { actorId: 'officer-1', issueId: 'i4', createdAt: new Date() },
           { actorId: 'officer-1', issueId: 'i5', createdAt: new Date() },
-        ])
+        ],
         // History: only 3 distinct days
-        .mockResolvedValueOnce([
+        [
           { createdAt: new Date('2026-09-20') },
           { createdAt: new Date('2026-09-21') },
           { createdAt: new Date('2026-09-22') },
-        ]);
+        ],
+      );
 
       await adversarialService.checkBulkClosureAnomaly();
       expect((db as any).values).not.toHaveBeenCalled();
@@ -428,11 +428,11 @@ describe('adversarialService', () => {
         { createdAt: new Date('2026-09-25') },
       ];
 
-      (db as any).where
-        .mockResolvedValueOnce(todayClosures)   // today's closures
-        .mockResolvedValueOnce(historyClosures) // 30-day history
-        // _insertFlag duplicate check repeated 20x — none exist
-        .mockResolvedValue([]);
+      queueQueryResults(
+        todayClosures, // today's closures
+        historyClosures, // 30-day history
+        ...Array.from({ length: 20 }, () => []), // no existing flag for each issue
+      );
 
       await adversarialService.checkBulkClosureAnomaly();
       // Should flag all 20 issues
@@ -451,14 +451,14 @@ describe('adversarialService', () => {
         { id: 'f1', issueId: 'iss-1', rule: 'TEMPORAL', severity: 'high', resolvedAt: null },
         { id: 'f2', issueId: 'iss-1', rule: 'PHOTO_REUSE', severity: 'medium', resolvedAt: null },
       ];
-      (db as any).where.mockResolvedValueOnce(mockFlags);
+      queueQueryResults(mockFlags);
       const flags = await adversarialService.getActiveFlags('iss-1');
       expect(flags).toHaveLength(2);
       expect(flags[0].rule).toBe('TEMPORAL');
     });
 
     it('returns empty array for issue with no flags', async () => {
-      (db as any).where.mockResolvedValueOnce([]);
+      queueQueryResults([]);
       const flags = await adversarialService.getActiveFlags('iss-clean');
       expect(flags).toHaveLength(0);
     });
@@ -466,7 +466,7 @@ describe('adversarialService', () => {
 
   describe('resolveFlag', () => {
     it('calls db.update with resolvedAt and resolution', async () => {
-      (db as any).where.mockResolvedValueOnce([]);
+      queueQueryResults([]);
       (db as any).set.mockReturnValue(db);
 
       await adversarialService.resolveFlag('flag-1', 'dismissed', 'user-123');
@@ -480,17 +480,19 @@ describe('adversarialService', () => {
 
   describe('runProofChecks (orchestration)', () => {
     it('runs all three checks without throwing even if one fails', async () => {
-      // First call (checkPhotoReuse media fetch) → throw
-      (db as any).where
-        .mockRejectedValueOnce(new Error('DB connection error'))
-        .mockResolvedValue([]);
+      // First query (checkPhotoReuse media fetch) fails; the others return empty results.
+      queueQueryErrors(new Error('DB connection error'));
 
       // Should resolve without throwing
       await expect(adversarialService.runProofChecks('iss-1', 'm1')).resolves.toBeUndefined();
     });
 
     it('does not throw even if all three checks fail', async () => {
-      (db as any).where.mockRejectedValue(new Error('Total outage'));
+      queueQueryErrors(
+        new Error('Photo query failed'),
+        new Error('Temporal query failed'),
+        new Error('GPS query failed'),
+      );
       await expect(adversarialService.runProofChecks('iss-1', 'm1')).resolves.toBeUndefined();
     });
   });

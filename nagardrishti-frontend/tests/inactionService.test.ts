@@ -2,13 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { inactionService } from '../server/services/inactionService.js';
 import { db } from '../server/db/index.js';
 
+const { queryResults } = vi.hoisted(() => ({ queryResults: [] as any[] }));
+
 // Mock the db with a stable chain that survives vi.resetAllMocks()
 vi.mock('../server/db/index.js', () => {
   const chain: any = {};
   chain.select = vi.fn().mockReturnValue(chain);
   chain.from = vi.fn().mockReturnValue(chain);
   chain.where = vi.fn().mockReturnValue(chain);
-  chain.orderBy = vi.fn().mockResolvedValue([]);
+  chain.orderBy = vi.fn().mockReturnValue(chain);
+  chain.then = (resolve: (value: any) => any, reject: (reason: any) => any) =>
+    Promise.resolve(queryResults.shift() ?? []).then(resolve, reject);
   chain.update = vi.fn().mockReturnValue(chain);
   chain.set = vi.fn().mockReturnValue(chain);
   chain.insert = vi.fn().mockReturnValue(chain);
@@ -20,10 +24,16 @@ describe('inactionService', () => {
   beforeEach(() => {
     // Only reset call counts — do NOT reset implementations
     vi.clearAllMocks();
-    // Re-stub the terminal .orderBy and .where to return empty by default
-    (db as any).orderBy.mockResolvedValue([]);
-    (db as any).where.mockResolvedValue([]);
+    queryResults.length = 0;
+    (db as any).select.mockReturnValue(db);
+    (db as any).from.mockReturnValue(db);
+    (db as any).where.mockReturnValue(db);
+    (db as any).orderBy.mockReturnValue(db);
   });
+
+  function queueQueryResults(...results: any[]) {
+    queryResults.push(...results);
+  }
 
   describe('computeTier', () => {
     it('returns T0 for <= 3 days', () => {
@@ -62,7 +72,7 @@ describe('inactionService', () => {
         { id: 'iss-3', createdAt: new Date(now - 10 * 86_400_000) }, // 10 days old, but recent action
       ];
 
-      (db as any).orderBy.mockResolvedValue([
+      queueQueryResults([
         // iss-1: no forward transitions, so it should be based on createdAt (40 days = T4)
         { issueId: 'iss-1', fromStatus: 'Open', toStatus: 'Open', createdAt: new Date(now - 35 * 86_400_000) }, // Lateral
 
@@ -90,7 +100,7 @@ describe('inactionService', () => {
       const now = Date.now();
       const issueInput = [{ id: 'iss-1', createdAt: new Date(now - 20 * 86_400_000) }];
       
-      (db as any).orderBy.mockResolvedValue([
+      queueQueryResults([
         // Lateral reassignment — should NOT reset the clock
         { issueId: 'iss-1', fromStatus: 'Assigned', toStatus: 'Assigned', createdAt: new Date(now - 1 * 86_400_000) },
         // Last real forward transition 20 days ago -> T3
@@ -111,7 +121,7 @@ describe('inactionService', () => {
 
   describe('computeNeglectZones', () => {
     it('returns ward IDs that have 5 or more T2+ issues', async () => {
-      (db as any).where.mockResolvedValue([
+      queueQueryResults([
         { id: 'ward-11', name: 'Kothrud' }
       ]);
 
@@ -138,7 +148,7 @@ describe('inactionService', () => {
     });
 
     it('returns empty results for no T2+ issues', async () => {
-      (db as any).where.mockResolvedValue([]);
+      queueQueryResults([]);
       const enrichedIssues = [
         { wardId: 'ward-11', tier: 1 },
         { wardId: 'ward-12', tier: 0 },
@@ -148,7 +158,7 @@ describe('inactionService', () => {
     });
 
     it('does not count null wardId issues', async () => {
-      (db as any).where.mockResolvedValue([]);
+      queueQueryResults([]);
       const enrichedIssues = [
         { wardId: null, tier: 4 },
         { wardId: null, tier: 3 },
