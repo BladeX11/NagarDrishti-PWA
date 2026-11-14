@@ -12,9 +12,14 @@ export async function suggestReportCategory(input: {
   category: string;
   imageDataUrl?: string;
 }): Promise<CategorySuggestion> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (import.meta.env.DEV) {
+    headers['x-demo-role'] = 'citizen';
+  }
   const response = await fetch(`${API_BASE}/ai/classify`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-demo-role': 'citizen' },
+    headers,
+    credentials: 'include',
     body: JSON.stringify({
       text: input.description,
       language: 'English',

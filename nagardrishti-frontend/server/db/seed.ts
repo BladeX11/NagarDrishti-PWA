@@ -11,36 +11,23 @@ function hashEvent(issueId: string, toStatus: string, actorId: string, prevHash:
 }
 
 function generateGeohash(lat: number, lng: number): string {
-  return `geo-${lat.toFixed(3)}-${lng.toFixed(3)}`; // Dummy geohash for seed
+  return `geo-${lat.toFixed(3)}-${lng.toFixed(3)}`;
 }
 
 async function seed() {
-  console.log('🌱 Seeding database...');
+  console.log('[seed] Checking and seeding database...');
 
-  // 1. Users
-  console.log('Creating users...');
-  const users = await db.insert(schema.users).values([
-    { phoneHash: crypto.createHash('sha256').update('9999999991').digest('hex'), displayName: 'Neel', role: 'citizen' },
-    { phoneHash: crypto.createHash('sha256').update('9999999992').digest('hex'), displayName: 'Priya', role: 'officer', department: 'roads', ward: 'ward-11' },
-    { phoneHash: crypto.createHash('sha256').update('9999999993').digest('hex'), displayName: 'Raj', role: 'admin' },
-    { phoneHash: crypto.createHash('sha256').update('9999999994').digest('hex'), displayName: 'Anita', role: 'researcher' },
-  ]).returning();
-
-  const citizen = users[0];
-  const officer = users[1];
-
-  // 2. Wards
-  console.log('Creating wards...');
-  const wards = await db.insert(schema.wards).values([
+  // 1. Wards (always ensure reference rows exist with onConflictDoNothing)
+  const wardRows = [
     { id: 'ward-11', name: 'Kothrud' },
     { id: 'ward-12', name: 'Deccan Gymkhana' },
     { id: 'ward-14', name: 'Swargate' },
     { id: 'ward-15', name: 'Kalyani Nagar' },
-  ]).returning();
+  ];
+  await db.insert(schema.wards).values(wardRows).onConflictDoNothing();
 
-  // 3. Departments
-  console.log('Creating departments...');
-  const departments = await db.insert(schema.departments).values([
+  // 2. Departments (always ensure reference rows exist with onConflictDoNothing)
+  const departmentRows = [
     { id: 'roads', name: 'Roads & Infrastructure' },
     { id: 'waste', name: 'Solid Waste Management' },
     { id: 'water', name: 'Water Supply' },
@@ -48,20 +35,40 @@ async function seed() {
     { id: 'electrical', name: 'Electrical & Streetlights' },
     { id: 'animals', name: 'Stray Animal Control' },
     { id: 'civic-works', name: 'Civic Works' },
-  ]).returning();
+  ];
+  await db.insert(schema.departments).values(departmentRows).onConflictDoNothing();
 
-  // 4. SLA Policies
-  console.log('Creating SLA policies...');
+  // 3. SLA Policies
   const categories = ['pothole/road', 'garbage/waste', 'drainage/sewage', 'water supply', 'streetlight/electrical', 'stray animals', 'encroachment', 'other'];
   const slaPoliciesData = categories.map((cat, i) => ({
     category: cat,
     priority: 3,
     deadlineDays: (i % 3) + 2,
   }));
-  await db.insert(schema.slaPolicies).values(slaPoliciesData).returning();
+  await db.insert(schema.slaPolicies).values(slaPoliciesData).onConflictDoNothing();
+
+  // 4. Users
+  const defaultUsers = [
+    { phoneHash: crypto.createHash('sha256').update('9999999991').digest('hex'), displayName: 'Neel', role: 'citizen' },
+    { phoneHash: crypto.createHash('sha256').update('9999999992').digest('hex'), displayName: 'Priya', role: 'officer', department: 'roads', ward: 'ward-11' },
+    { phoneHash: crypto.createHash('sha256').update('9999999993').digest('hex'), displayName: 'Raj', role: 'admin' },
+    { phoneHash: crypto.createHash('sha256').update('9999999994').digest('hex'), displayName: 'Anita', role: 'researcher' },
+  ];
+  await db.insert(schema.users).values(defaultUsers).onConflictDoNothing();
+
+  // Skip demo issues if database already has issues
+  const existingIssues = await db.select({ id: schema.issues.id }).from(schema.issues).limit(1);
+  if (existingIssues.length > 0) {
+    console.log('[seed] Reference tables verified; issues already exist, skipping demo issue seed.');
+    return;
+  }
+
+  const allUsers = await db.select().from(schema.users);
+  const citizen = allUsers.find((u) => u.role === 'citizen') || allUsers[0];
+  const officer = allUsers.find((u) => u.role === 'officer') || allUsers[0];
 
   // 5. Issues & Status Events
-  console.log('Creating issues & status events...');
+  console.log('[seed] Creating initial issues and status events...');
   const seedPoints = [
     [18.5204, 73.8567], [18.5235, 73.8541], [18.5172, 73.8583], [18.5261, 73.8498],
     [18.5148, 73.8611], [18.5294, 73.8532], [18.5119, 73.8478], [18.5331, 73.8624],
@@ -80,13 +87,13 @@ async function seed() {
       description: `Detailed description for issue ${i}`,
       category: categories[i % categories.length],
       status: 'Open',
-      departmentId: departments[i % departments.length].id,
+      departmentId: departmentRows[i % departmentRows.length].id,
       privateLat: lat,
       privateLng: lng,
       publicGeohash: generateGeohash(lat, lng),
       publicLat: lat,
       publicLng: lng,
-      wardId: wards[i % wards.length].id,
+      wardId: wardRows[i % wardRows.length].id,
       reporterId: citizen.id,
       assignedTo: officer.id,
     });
@@ -126,18 +133,18 @@ async function seed() {
         createdAt: triagedTimestamp,
       });
       prevEventHash = eHash2;
-      
+
       await db.update(schema.issues).set({ status: 'Triaged' }).where(eq(schema.issues.id, issue.id));
     }
   }
 
   // 6. Scorecard Snapshots
-  console.log('Creating scorecard snapshots...');
+  console.log('[seed] Creating scorecard snapshots...');
   const snapshots = [];
   for (let i = 0; i < 8; i++) {
     snapshots.push({
-      wardId: wards[i % wards.length].id,
-      departmentId: departments[i % departments.length].id,
+      wardId: wardRows[i % wardRows.length].id,
+      departmentId: departmentRows[i % departmentRows.length].id,
       period: '2023-Q3',
       totalIssues: 100 + i * 10,
       resolvedIssues: 80 + i * 5,
@@ -148,11 +155,11 @@ async function seed() {
   }
   await db.insert(schema.scorecardSnapshots).values(snapshots);
 
-  console.log('✅ Seeding complete!');
+  console.log('[seed] Seeding complete.');
 }
 
-seed().catch(e => {
-  console.error('Seeding failed:', e);
+seed().catch((e) => {
+  console.error('[seed] Seeding failed:', e);
   process.exit(1);
 }).finally(() => {
   process.exit(0);

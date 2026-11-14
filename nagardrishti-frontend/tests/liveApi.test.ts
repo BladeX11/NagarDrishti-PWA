@@ -70,4 +70,32 @@ describe('liveApi authentication & production session support', () => {
     const user = await liveApi.auth.me();
     expect(user).toEqual({ id: 'u123', role: 'citizen', name: 'Citizen Demo' });
   });
+
+  it('suggestReportCategory sends credentials: include and suppresses x-demo-role in production', async () => {
+    const { suggestReportCategory } = await import('../../src/lib/categorySuggestion.js');
+
+    let capturedInit: RequestInit | undefined;
+    globalThis.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      capturedInit = init;
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          data: { category: 'pothole/road', reason: 'Matched pothole', source: 'local-ml', modelVersion: 'v1' },
+        }),
+      } as Response);
+    });
+
+    const result = await suggestReportCategory({
+      description: 'Deep pothole near bus stop',
+      category: 'pothole/road',
+    });
+
+    expect(result.category).toBe('pothole/road');
+    expect(capturedInit?.credentials).toBe('include');
+    const headers = capturedInit?.headers as Record<string, string>;
+    if (!import.meta.env.DEV) {
+      expect(headers['x-demo-role']).toBeUndefined();
+    }
+  });
 });

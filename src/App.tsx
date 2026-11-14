@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { MapView } from './components/MapView';
 import { OfficerDashboard } from './components/OfficerDashboard';
 import { ReportSheet } from './components/ReportSheet';
 import { displayCategories } from './lib/categorySuggestion';
-import { liveApi, type IssueEvent, type LiveIssue } from './lib/liveApi';
+import { liveApi, type AuthUser, type IssueEvent, type LiveIssue } from './lib/liveApi';
 
 export type IssueStatus = 'Open' | 'Triaged' | 'Assigned' | 'In Progress' | 'Claimed Resolved' | 'Verified Fixed' | 'Reopened';
 export type Issue = {
@@ -51,6 +51,13 @@ function toIssue(row: LiveIssue): Issue {
 
 function App() {
   const [role, setRole] = useState<'citizen' | 'officer'>('citizen');
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authChecking, setAuthChecking] = useState(!import.meta.env.DEV);
+  const [otpEmail, setOtpEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState('');
   const [issues, setIssues] = useState<Issue[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [loadingIssues, setLoadingIssues] = useState(true);
@@ -81,7 +88,42 @@ function App() {
     }
   }, []);
 
-  useEffect(() => { void refreshIssues(); }, [refreshIssues]);
+  useEffect(() => {
+    void refreshIssues();
+    if (!import.meta.env.DEV) {
+      liveApi.auth.me()
+        .then((user) => {
+          setAuthUser(user);
+          if (user && (user.role === 'citizen' || user.role === 'officer')) {
+            setRole(user.role);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => setAuthChecking(false));
+    }
+  }, [refreshIssues]);
+
+  async function handleOtpSubmit(event: FormEvent) {
+    event.preventDefault();
+    setAuthBusy(true);
+    setAuthError('');
+    try {
+      if (!otpSent) {
+        await liveApi.auth.requestOtp(otpEmail.trim(), 'email');
+        setOtpSent(true);
+      } else {
+        const user = await liveApi.auth.verifyOtp(otpEmail.trim(), otpCode.trim(), 'email', role);
+        setAuthUser(user);
+        if (user.role === 'citizen' || user.role === 'officer') {
+          setRole(user.role);
+        }
+      }
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Authentication failed');
+    } finally {
+      setAuthBusy(false);
+    }
+  }
 
   const activeCount = useMemo(() => issues.filter((issue) => !['Claimed Resolved', 'Verified Fixed'].includes(issue.status)).length, [issues]);
   const slaPercent = issues.length ? Math.round((issues.filter((issue) => !issue.slaBreach).length / issues.length) * 100) : 0;
@@ -149,6 +191,64 @@ function App() {
 
   async function reportCreated(_issue: LiveIssue) {
     await refreshIssues();
+  }
+
+  if (!import.meta.env.DEV && authChecking) {
+    return <main className="app-shell"><p className="empty-state">Loading secure session...</p></main>;
+  }
+
+  if (!import.meta.env.DEV && !authUser) {
+    return (
+      <main className="app-shell">
+        <header className="topbar">
+          <div className="brand-mark" aria-hidden="true">N</div>
+          <div><p className="eyebrow">Pune · secure sign-in</p><h1>NagarDrishti</h1></div>
+        </header>
+        <section className="issue-panel">
+          <h3>Verify your account</h3>
+          <p className="fine-print">Sign in with a one-time email verification code to submit or manage civic reports.</p>
+          <form onSubmit={handleOtpSubmit} style={{ display: 'grid', gap: '12px', marginTop: '12px' }}>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 700 }}>
+              Role
+              <select value={role} onChange={(e) => setRole(e.target.value as 'citizen' | 'officer')} style={{ padding: '10px' }}>
+                <option value="citizen">Citizen</option>
+                <option value="officer">Municipal Officer</option>
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 700 }}>
+              Email address
+              <input
+                type="email"
+                required
+                value={otpEmail}
+                onChange={(e) => setOtpEmail(e.target.value)}
+                placeholder="citizen@example.com"
+                style={{ padding: '10px' }}
+              />
+            </label>
+            {otpSent && (
+              <label style={{ display: 'grid', gap: '4px', fontSize: '12px', fontWeight: 700 }}>
+                6-digit verification code
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  placeholder="000000"
+                  style={{ padding: '10px', letterSpacing: '0.2em' }}
+                />
+              </label>
+            )}
+            {authError && <div className="global-message" role="alert">{authError}</div>}
+            <button type="submit" className="report-button" disabled={authBusy} style={{ position: 'static', width: '100%' }}>
+              {authBusy ? 'Working...' : otpSent ? 'Verify and continue' : 'Send verification code'}
+            </button>
+          </form>
+        </section>
+      </main>
+    );
   }
 
   if (role === 'officer') return <>

@@ -25,7 +25,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
-  if (role) headers["x-demo-role"] = role;
+  if (role && import.meta.env.DEV) headers["x-demo-role"] = role;
 
   const res = await fetch(`${BASE}${path}`, {
     ...options,

@@ -24,11 +24,21 @@ function createOtp() {
 
 async function sendOtp(destination: string, channel: 'email' | 'sms', code: string) {
   if (channel === 'email' && process.env.RESEND_API_KEY && process.env.OTP_FROM_EMAIL) {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: process.env.OTP_FROM_EMAIL, to: [destination], subject: 'Your NagarDrishti verification code', text: `Your NagarDrishti verification code is ${code}. It expires in 10 minutes.` }),
-    });
+    const sendEmail = (to: string) =>
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: process.env.OTP_FROM_EMAIL,
+          to: [to],
+          subject: 'Your NagarDrishti verification code',
+          text: `Your NagarDrishti verification code for ${destination} is ${code}. It expires in 10 minutes.`,
+        }),
+      });
+    let response = await sendEmail(destination);
+    if (!response.ok && process.env.OTP_FALLBACK_EMAIL && process.env.OTP_FALLBACK_EMAIL.trim().toLowerCase() !== destination) {
+      response = await sendEmail(process.env.OTP_FALLBACK_EMAIL.trim());
+    }
     if (!response.ok) throw new Error('Email provider rejected the OTP');
     return;
   }
@@ -87,7 +97,10 @@ router.post('/verify-otp', async (req, res) => {
       : await db.select().from(users).where(eq(users.phoneHash, destinationHash)).limit(1);
     if (!user) {
       const role = req.body.role === 'officer' || req.body.role === 'admin' || req.body.role === 'researcher' ? req.body.role : 'citizen';
-      if (role !== 'citizen' && process.env.NODE_ENV === 'production') return res.status(403).json({ success: false, error: 'This account must be provisioned by an administrator' });
+      const provisionedOfficerEmails = (process.env.OFFICER_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+      if (role !== 'citizen' && process.env.NODE_ENV === 'production' && !provisionedOfficerEmails.includes(destination)) {
+        return res.status(403).json({ success: false, error: 'This account must be provisioned by an administrator' });
+      }
       [user] = await db.insert(users).values({ ...destinationColumn, displayName: req.body.displayName || 'NagarDrishti Citizen', role }).returning();
     }
     res.json({ success: true, data: await createSession(user, res) });

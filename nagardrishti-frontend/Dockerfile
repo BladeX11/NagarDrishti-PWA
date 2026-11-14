@@ -19,4 +19,4 @@ COPY --from=build /app/server/db ./server/db
 COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
 
 EXPOSE 5000
-CMD sh -c "pnpm drizzle-kit migrate && node dist/index.js"
+CMD sh -c "pnpm drizzle-kit migrate && pnpm db:seed && node dist/index.js"

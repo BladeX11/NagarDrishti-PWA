@@ -412,12 +412,16 @@ export function ReportFlow() {
     if (!text.trim()) return;
     setAiSuggestion(s => ({ ...s, reason: "", source: null, loading: true }));
     try {
+      const classifyHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (import.meta.env.DEV) {
+        classifyHeaders["x-demo-role"] = localStorage.getItem("nd-role") || "citizen";
+      }
       const res = await fetch("/api/ai/classify", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-demo-role": localStorage.getItem("nd-role") || "citizen",
-        },
+        headers: classifyHeaders,
+        credentials: "include",
         body: JSON.stringify({ text, language: languageName, category, imageDataUrl: photo || undefined }),
       });
       const json = await res.json();
