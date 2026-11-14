@@ -3,7 +3,8 @@ import { issueService } from "../services/issueService.js";
 import { workflowService } from "../services/workflowService.js";
 import { verificationService } from "../services/verificationService.js";
 import { adversarialService } from "../services/adversarialService.js";
-import { requireAuth, requireRole } from "../middleware/auth.js";
+import { optionalAuth, requireAuth, requireRole } from "../middleware/auth.js";
+import { privacyService } from "../services/privacyService.js";
 import { aiQueue } from "../ai/queue.js";
 import multer from "multer";
 import { notificationService } from "../services/notificationService.js";
@@ -30,10 +31,18 @@ const uploadPhoto = (req: any, res: any, next: any) =>
       .json({ success: false, error: error.message || "Photo upload failed" });
   });
 
-router.get("/", async (req, res) => {
+router.get("/", optionalAuth, async (req, res) => {
   try {
     const issues = await issueService.listIssues(req.query);
-    res.json({ success: true, data: issues });
+    res.json({
+      success: true,
+      data: {
+        ...issues,
+        items: issues.items.map((issue) =>
+          privacyService.forViewer(issue as unknown as Record<string, unknown>, req.user)
+        ),
+      },
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -112,12 +121,15 @@ router.post(
   }
 );
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", optionalAuth, async (req, res) => {
   try {
     const issue = await issueService.getIssue(req.params.id);
     if (!issue)
       return res.status(404).json({ success: false, error: "Not found" });
-    res.json({ success: true, data: issue });
+    res.json({
+      success: true,
+      data: privacyService.forViewer(issue as unknown as Record<string, unknown>, req.user),
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -282,7 +294,12 @@ router.get("/:id/timeline", async (req, res) => {
   try {
     const { auditService } = await import("../services/auditService.js");
     const timeline = await auditService.getIssueTimeline(req.params.id);
-    res.json({ success: true, data: timeline });
+    res.json({
+      success: true,
+      data: timeline.map((event) =>
+        privacyService.redactTimelineEvent(event as unknown as Record<string, unknown>)
+      ),
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

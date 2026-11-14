@@ -3,6 +3,7 @@ import { scorecardService } from '../services/scorecardService.js';
 import { db } from '../db/index.js';
 import { issues } from '../db/schema.js';
 import { inactionService } from '../services/inactionService.js';
+import { privacyService } from '../services/privacyService.js';
 
 const router = Router();
 
@@ -22,7 +23,10 @@ router.get('/scorecards', async (req, res) => {
 router.get('/sla-breaches', async (req, res) => {
   try {
     const breaches = await scorecardService.computeSLABreaches();
-    res.json({ success: true, data: breaches });
+    res.json({
+      success: true,
+      data: breaches.map((issue) => privacyService.redactForPublic(issue as unknown as Record<string, unknown>)),
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -31,7 +35,10 @@ router.get('/sla-breaches', async (req, res) => {
 router.get('/forgotten', async (req, res) => {
   try {
     const forgotten = await scorecardService.computeForgottenIssues();
-    res.json({ success: true, data: forgotten });
+    res.json({
+      success: true,
+      data: forgotten.map((issue) => privacyService.redactForPublic(issue as unknown as Record<string, unknown>)),
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
