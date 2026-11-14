@@ -1,7 +1,7 @@
-import { clamp, haversineMetres, jaccardSimilarity, normalizeText } from '../ai/features.js';
+import { clamp, haversineMetres, normalizeText, tfidfCosineSimilarity } from '../ai/features.js';
 import type { Category } from '../../shared/types.js';
 
-export const BENCHMARK_VERSION = 'civictrust-benchmark-v1';
+export const BENCHMARK_VERSION = 'civictrust-synthetic-template-split-v2';
 export const EVALUATION_SEED = 20260927;
 
 export type BenchmarkCase = {
@@ -37,11 +37,21 @@ const records: Array<[Category, string, string, string, string, string]> = [
   ['other', 'damaged traffic sign at the junction', 'चौराहे पर यातायात संकेत टूटा है', 'चौकातील वाहतूक फलक तुटला', 'damaged sign', 'sign'],
 ];
 
+const templates = [
+  ['resident report', 'please inspect this issue', 'an issue was observed', 'requesting municipal repair', 'reported in the neighborhood'],
+  ['निवासी की सूचना', 'कृपया इस समस्या की जांच करें', 'यह समस्या देखी गई', 'नगरपालिका से सुधार का अनुरोध', 'मोहल्ले से शिकायत'],
+  ['रहिवाशाची नोंद', 'कृपया या समस्येची पाहणी करा', 'ही समस्या दिसून आली', 'महापालिकेकडे दुरुस्तीची विनंती', 'परिसरातून तक्रार'],
+] as const;
+
 export const benchmarkCases: BenchmarkCase[] = records.flatMap(([category, en, hi, mr, visualCue], categoryIndex) =>
   (['en', 'hi', 'mr'] as const).flatMap((language, languageIndex) =>
     Array.from({ length: 15 }, (_, variant) => {
+      const template = Math.floor(variant / 3);
       const severity = (variant + categoryIndex) % 4;
-      const text = language === 'en' ? `${en}; ${severity === 3 ? 'urgent safety hazard' : 'reported by a resident'} at location ${variant + 1}` : language === 'hi' ? `${hi}; ${severity === 3 ? 'तत्काल खतरा' : 'निवासी की शिकायत'} स्थान ${variant + 1}` : `${mr}; ${severity === 3 ? 'तातडीचा धोका' : 'रहिवाशाची तक्रार'} ठिकाण ${variant + 1}`;
+      const base = language === 'en' ? en : language === 'hi' ? hi : mr;
+      const location = language === 'en' ? `sector ${variant + 1}` : language === 'hi' ? `क्षेत्र ${variant + 1}` : `विभाग ${variant + 1}`;
+      const urgency = language === 'en' ? (severity === 3 ? ' urgent safety hazard' : '') : language === 'hi' ? (severity === 3 ? ' तत्काल सुरक्षा खतरा' : '') : (severity === 3 ? ' तातडीचा सुरक्षेचा धोका' : '');
+      const text = `${base}; ${templates[languageIndex][template]} ${location}${urgency}`;
       return {
         id: `C-${categoryIndex + 1}-${language.toUpperCase()}-${String(variant + 1).padStart(2, '0')}`,
         language,
@@ -53,23 +63,18 @@ export const benchmarkCases: BenchmarkCase[] = records.flatMap(([category, en, h
         visualCue,
         priority: (severity + 1) as 1 | 2 | 3 | 4,
         ward: `ward-${11 + ((categoryIndex + variant) % 4)}`,
-        split: variant < 10 ? 'train' : variant < 13 ? 'validation' : 'test',
+        // Hold out context-wrapper templates; the category phrase is still shared across splits.
+        split: template < 3 ? 'train' : template === 3 ? 'validation' : 'test',
       };
     }),
   ),
 );
 
-export const duplicatePairs: DuplicatePair[] = benchmarkCases.slice(0, 12).map((left, index) => {
+export const duplicatePairs: DuplicatePair[] = benchmarkCases.slice(0, 48).map((left, index) => {
   const same = index % 2 === 0;
-  const source = same ? left : benchmarkCases[(index + 5) % benchmarkCases.length];
-  // Hard negatives share a location but describe a different civic problem.
-  const right = {
-    ...source,
-    id: `${source.id}-R`,
-    latitude: left.latitude + 0.0005,
-    longitude: left.longitude + 0.0005,
-    text: same ? `${left.text} near the same location` : source.text,
-  };
+  const source = same ? left : benchmarkCases.find((item) => item.language === left.language && item.category !== left.category)!;
+  const right = { ...source, id: `${source.id}-R`, latitude: left.latitude + 0.0005, longitude: left.longitude + 0.0005,
+    text: same ? `${left.text} near this same location, still unresolved` : source.text };
   return { id: `P-${index + 1}`, left, right, isDuplicate: same, imageSimilarity: same ? 0.82 : 0.12 };
 });
 
@@ -101,7 +106,7 @@ export function predictCategory(item: BenchmarkCase, mode: 'prior' | 'keyword' |
 export function predictDuplicate(pair: DuplicatePair, mode: 'spatial' | 'text' | 'combined' | 'full') {
   const distance = haversineMetres(pair.left.latitude, pair.left.longitude, pair.right.latitude, pair.right.longitude);
   const spatial = Math.exp(-distance / 500);
-  const text = jaccardSimilarity(pair.left.text, pair.right.text);
+  const text = tfidfCosineSimilarity(pair.left.text, pair.right.text, [pair.left.text, pair.right.text]);
   const image = pair.imageSimilarity;
   const score = mode === 'spatial' ? spatial : mode === 'text' ? text : mode === 'combined' ? (spatial * 0.55 + text * 0.45) : (spatial * 0.35 + text * 0.35 + image * 0.30);
   return { score: clamp(score), confidence: clamp(0.5 + Math.abs(score - 0.5)) };

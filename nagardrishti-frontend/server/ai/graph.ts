@@ -2,7 +2,7 @@ import { ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { issueGraphEdges, issues } from '../db/schema.js';
 import { AI_VERSION, type IssueInferenceContext } from './contracts.js';
-import { clamp, haversineMetres, jaccardSimilarity } from './features.js';
+import { clamp, haversineMetres, tfidfCosineSimilarity } from './features.js';
 
 type GraphNode = { id: string; publicRef: string; category: string; status: string };
 type GraphEdge = {
@@ -48,6 +48,7 @@ export const issueGraphService = {
     const nodes = await db.select().from(issues).where(ne(issues.status, 'Verified Fixed'));
     const edges: GraphEdge[] = [];
 
+    const corpus = nodes.map((node) => `${node.title} ${node.description ?? ''}`);
     for (let index = 0; index < nodes.length; index += 1) {
       for (let next = index + 1; next < nodes.length; next += 1) {
         const left = nodes[index];
@@ -57,10 +58,7 @@ export const issueGraphService = {
         const distance = haversineMetres(left.privateLat, left.privateLng, right.privateLat, right.privateLng);
         if (distance > 1500) continue;
 
-        const textSimilarity = jaccardSimilarity(
-          `${leftContext.title} ${leftContext.description}`,
-          `${rightContext.title} ${rightContext.description}`,
-        );
+        const textSimilarity = tfidfCosineSimilarity(corpus[index], corpus[next], corpus);
         const categoryMatch = left.category === right.category;
         const timeSimilarity = temporalSimilarity(left.createdAt, right.createdAt);
         const spatialSimilarity = Math.exp(-distance / 500);

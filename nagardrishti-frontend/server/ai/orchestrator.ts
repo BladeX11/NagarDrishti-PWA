@@ -7,6 +7,7 @@ import { predictCategory, predictDepartment, predictPriority, predictProof, scor
 import { haversineMetres } from './features.js';
 import { issueGraphService } from './graph.js';
 import { calibratePrediction } from './calibration.js';
+import { suggestCategory } from './categorySuggestion.js';
 
 function toContext(issue: typeof issues.$inferSelect): IssueInferenceContext {
   return {
@@ -30,19 +31,40 @@ export const aiOrchestrator = {
     if (!issue) throw new Error('Issue not found');
 
     const context = toContext(issue);
+    const categorySuggestion = await suggestCategory(
+      `${context.title}\n${context.description}`,
+      issue.language === 'hi' ? 'Hindi' : issue.language === 'mr' ? 'Marathi' : 'English',
+      context.category as Category,
+    );
+    const categoryPrediction = categorySuggestion.source !== 'rules'
+      ? {
+          ...predictCategory(context),
+          prediction: categorySuggestion.category,
+          confidence: 0.5,
+          explanation: categorySuggestion.reason,
+          signals: [],
+          modelVersion: categorySuggestion.modelVersion,
+          dataVersion: categorySuggestion.source === 'gemini' ? 'live-report-text-v1' : 'civictrust-benchmark-v1',
+        }
+      : {
+          ...predictCategory(context),
+          explanation: categorySuggestion.reason,
+          modelVersion: categorySuggestion.modelVersion,
+        };
     const predictions = [
-      predictCategory(context),
+      categoryPrediction,
       predictDepartment(context.category as Category),
       predictPriority(context),
       predictProof(context.hasProof),
     ].map(calibratePrediction);
 
     const candidates = await db.select().from(issues).where(and(ne(issues.id, issue.id), ne(issues.status, 'Verified Fixed')));
+    const duplicateCorpus = [context, ...candidates.map(toContext)].map((item) => `${item.title} ${item.description}`);
     const duplicateCandidates = candidates
       .filter((candidate) => haversineMetres(context.latitude, context.longitude, candidate.privateLat, candidate.privateLng) <= 1500)
       .map((candidate) => {
         const distanceMetres = haversineMetres(context.latitude, context.longitude, candidate.privateLat, candidate.privateLng);
-        const result = scoreDuplicate(context, { ...toContext(candidate), publicRef: candidate.publicRef }, distanceMetres);
+        const result = scoreDuplicate(context, { ...toContext(candidate), publicRef: candidate.publicRef }, distanceMetres, duplicateCorpus);
         return { ...result, distanceMetres };
       })
       .filter((candidate) => candidate.score >= 0.35)

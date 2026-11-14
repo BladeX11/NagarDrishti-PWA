@@ -1,5 +1,5 @@
 import type { Category } from '../../shared/types.js';
-import { clamp, jaccardSimilarity } from './features.js';
+import { clamp, tfidfCosineSimilarity } from './features.js';
 import type { DuplicateCandidate, IssueInferenceContext, Prediction } from './contracts.js';
 import { AI_DATA_VERSION, AI_VERSION } from './contracts.js';
 
@@ -25,17 +25,20 @@ function categoryScore(text: string, category: Category): number {
   return clamp(matches / Math.max(1, CATEGORY_KEYWORDS[category].length > 3 ? 2 : 1));
 }
 
-export function predictCategory(context: IssueInferenceContext): Prediction<Category> {
-  const text = `${context.title} ${context.description}`;
+export function predictCategoryFromText(text: string, fallbackCategory: Category = 'other'): Prediction<Category> {
   const scores = (Object.keys(CATEGORY_KEYWORDS) as Category[]).map((category) => ({ category, score: categoryScore(text, category) }));
   scores.sort((a, b) => b.score - a.score);
-  const top = scores[0].score > 0 ? scores[0] : { category: context.category as Category, score: 0.55 };
+  const top = scores[0].score > 0 ? scores[0] : { category: fallbackCategory, score: 0.55 };
   const confidence = clamp(0.55 + top.score * 0.4);
   return {
     module: 'M1', prediction: top.category, confidence, modelVersion: AI_VERSION, dataVersion: AI_DATA_VERSION, status: 'pending',
     explanation: top.score > 0 ? `Keyword evidence supports ${top.category}.` : 'No strong keyword signal; retaining the stored category as a manual baseline.',
     signals: [{ signal: 'category_keyword_evidence', value: top.category, contribution: top.score }],
   };
+}
+
+export function predictCategory(context: IssueInferenceContext): Prediction<Category> {
+  return predictCategoryFromText(`${context.title} ${context.description}`, context.category as Category);
 }
 
 export function predictDepartment(category: Category): Prediction<string> {
@@ -66,14 +69,16 @@ export function predictPriority(context: IssueInferenceContext): Prediction<{ ba
   };
 }
 
-export function scoreDuplicate(context: IssueInferenceContext, candidate: IssueInferenceContext & { publicRef: string }, distanceMetres: number): DuplicateCandidate {
-  const textSimilarity = jaccardSimilarity(`${context.title} ${context.description}`, `${candidate.title} ${candidate.description}`);
+export function scoreDuplicate(context: IssueInferenceContext, candidate: IssueInferenceContext & { publicRef: string }, distanceMetres: number, corpus?: string[]): DuplicateCandidate {
+  const leftText = `${context.title} ${context.description}`;
+  const rightText = `${candidate.title} ${candidate.description}`;
+  const textSimilarity = tfidfCosineSimilarity(leftText, rightText, corpus ?? [leftText, rightText]);
   const categoryMatch = context.category === candidate.category;
   const spatialSignal = Math.exp(-distanceMetres / 500);
   const score = clamp(spatialSignal * 0.45 + textSimilarity * 0.35 + (categoryMatch ? 0.2 : 0));
   const reasons = [
     categoryMatch ? 'same category' : 'different category',
-    textSimilarity > 0.2 ? 'similar description terms' : 'weak text overlap',
+    textSimilarity > 0.2 ? 'similar TF-IDF description terms' : 'weak TF-IDF text similarity',
     `within ${Math.round(distanceMetres)}m spatial radius`,
   ];
   return { issueId: candidate.issueId, publicRef: candidate.publicRef, distanceMetres, textSimilarity, categoryMatch, score, reasons };

@@ -93,7 +93,7 @@ export function runEvaluation() {
   const classification = (['prior', 'keyword', 'multilingual', 'trained_nb', 'full'] as const).map(runClassification);
   const duplicates = (['spatial', 'text', 'combined', 'full'] as const).map(runDuplicates);
   return {
-    benchmark: { version: BENCHMARK_VERSION, seed: EVALUATION_SEED, cases: benchmarkCases.length, duplicatePairs: duplicatePairs.length, languages: ['en', 'hi', 'mr'], splits: { train: benchmarkCases.filter((item) => item.split === 'train').length, validation: benchmarkCases.filter((item) => item.split === 'validation').length, test: benchmarkCases.filter((item) => item.split === 'test').length } },
+    benchmark: { version: BENCHMARK_VERSION, seed: EVALUATION_SEED, cases: benchmarkCases.length, duplicatePairs: duplicatePairs.length, languages: ['en', 'hi', 'mr'], dataSource: 'synthetic templates; not real-world validated', splitMethod: 'held-out report-context templates', limitation: 'category phrases overlap across splits; scores are demo diagnostics, not generalization estimates', splits: { train: benchmarkCases.filter((item) => item.split === 'train').length, validation: benchmarkCases.filter((item) => item.split === 'validation').length, test: benchmarkCases.filter((item) => item.split === 'test').length } },
     classification,
     duplicates,
     priority: priorityEvaluation(),

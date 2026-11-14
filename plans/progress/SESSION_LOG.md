@@ -296,3 +296,51 @@
 - `nagardrishti-frontend/.gitignore`
 - `nagardrishti-frontend/package.json`
 - `MISTAKES.md`
+
+## Session: 2026-11-13 (Gemini Category Suggestions)
+**Phase:** Phase 6 (TAS Scoring + AI Baselines) — IN PROGRESS
+**Completed:** Added an optional server-side Gemini category suggestion provider used by both `/api/ai/classify` and the issue inference orchestrator; validated model output against the approved category list; added a timeout and keyword-rule fallback; updated the citizen reporting UI to show a suggested category, reason, and provider without fabricated confidence; documented the Gemini server environment settings for local and production deployment.
+**In Progress:** Configure a real `GEMINI_API_KEY` in the local/deployment secret store and exercise a live request.
+**Blocked:** Live Gemini call not verified because no key was supplied/configured for this session.
+**Key Decisions:** Keep the category-to-department mapping, priority scoring, and issue workflow deterministic. Gemini only suggests a report category. Citizen descriptions are sent to Google only when a server-side key is configured; the UI discloses this and advises against including contact details. Rule-based suggestions remain available without the key or when the provider fails.
+**Next Session Should:** Set `GEMINI_API_KEY` as a local server environment secret, start the app, and verify that the response source is `gemini`; then test the no-key and provider-failure fallback paths.
+**Files Changed:** `nagardrishti-frontend/.env.example`, `nagardrishti-frontend/client/src/pages/citizen/CitizenPages.tsx`, `nagardrishti-frontend/docker-compose.prod.yml`, `nagardrishti-frontend/server/ai/categorySuggestion.ts`, `nagardrishti-frontend/server/ai/orchestrator.ts`, `nagardrishti-frontend/server/ai/rules.ts`, `nagardrishti-frontend/server/config.ts`, `nagardrishti-frontend/server/routes/ai.ts`, `plans/05-implementation-roadmap.md`, `plans/progress/SESSION_LOG.md`
+**Verification:** `pnpm run check` and `pnpm run build` completed successfully. The build reports an existing large-chunk warning; the automated test suite was not run.
+
+## Session: 2026-11-13 (Gemini Image Suggestions, TF-IDF, and Benchmark Split)
+**Phase:** Phase 6 (TAS Scoring + AI Baselines) — IN PROGRESS
+**Completed:** Added optional compressed-photo input to Gemini category suggestions with a strict image MIME/base64/size check and an explicit citizen-facing disclosure; image bytes are not passed to the local classifier. Replaced live duplicate text overlap with smoothed Unicode-aware TF-IDF cosine similarity in candidate scoring and graph edges. Revised synthetic benchmark context splits, expanded duplicate pairs with same-location negatives, and exposed data-source/split-method metadata in evaluation output. Category phrase families still overlap across benchmark splits.
+**In Progress:** Replace synthetic examples with consented, labeled civic reports before claiming real-world quality; validate Gemini using an authorized live demo request.
+**Blocked:** No real labeled dataset is available in the project, so model generalization and image-category quality remain unverified.
+**Key Decisions:** Gemini photo input is only for advisory category suggestions and is not used for severity, proof-of-fix, or workflow decisions. Keep routing, priority, and proof checks deterministic. The synthetic template split reduces context-template leakage but does not create external validity.
+**Next Session Should:** Run `pnpm run check` and `pnpm run build`; exercise both local text-only and Gemini text/photo flows with non-sensitive demo images after confirming the key is configured.
+**Files Changed:** `nagardrishti-frontend/server/ai/features.ts`, `server/ai/rules.ts`, `server/ai/graph.ts`, `server/ai/orchestrator.ts`, `server/ai/categorySuggestion.ts`, `server/routes/ai.ts`, `server/evaluation/benchmark.ts`, `server/evaluation/runner.ts`, `client/src/pages/citizen/CitizenPages.tsx`, `plans/04-ai-modules.md`, `plans/05-implementation-roadmap.md`
+
+## Session: 2026-11-13 (Mobile PWA AI Category Suggestions)
+**Phase:** Demo client integration
+**Completed:** Connected the root mobile-style PWA report sheet to the shared `/api/ai/classify` backend, mapped mobile category labels to the backend taxonomy, added optional camera/photo picker with JPEG compression, advisory suggestion/apply UI, and data-sharing disclosure. Added `VITE_API_BASE_URL` configuration for local or deployed API origins. Gemini credentials remain server-only.
+**In Progress:** Exercise the mobile PWA against the running backend and confirm the Gemini/local provider modes in a browser or phone.
+**Blocked:** The mobile PWA still has a presentation-only report submission flow; this change integrates category suggestions but does not persist reports.
+**Key Decisions:** Keep the mobile experience on the same authenticated demo backend; never place the Gemini key in the mobile bundle. Explicitly disclose app-server transfer and conditional forwarding to Google.
+**Next Session Should:** Set `VITE_API_BASE_URL` to a reachable HTTPS backend for phone demos, allow the deployed PWA origin in backend `CORS_ORIGINS`, then verify local ML and Gemini suggestion flows with non-sensitive sample content.
+**Files Changed:** `src/components/ReportSheet.tsx`, `src/lib/categorySuggestion.ts`, `src/vite-env.d.ts`, `src/styles.css`, `.env.example`
+**Verification:** Root PWA `npm run build` passed. No live backend request was made in this turn.
+
+## Session: 2026-11-14 (Make Mobile PWA Work Against Live Demo Data)
+**Phase:** Demo client integration
+**Completed:** Replaced hard-coded mobile PWA issue cards with data loaded from the shared API; added refresh, persisted report submission, support, timeline, and backend-valid officer triage/assign/in-progress/resolution-note workflow. Split photo actions into direct camera capture and gallery selection; added current-location capture with browser permission/error handling. Replaced static scorecard counts with metrics derived from loaded issue data, added responsive layouts, and corrected README startup instructions/ports.
+**In Progress:** Verify camera/GPS and report write flows on a physical phone; this session verified API reads and builds only.
+**Blocked:** A public phone demo needs HTTPS, a reachable API URL, configured CORS, and production sign-in. The demo-role headers work only in API development mode. Resolution notes are not proof-photo uploads.
+**Key Decisions:** Keep Gemini credentials on the API server. Camera/gallery images are compressed client-side. Image category analysis runs only when a user explicitly requests a suggestion. Public coordinates are coarsened by the backend.
+**Next Session Should:** Set mobile PWA/API origins for the HTTPS deployment, configure production authentication, and add proof-photo upload if field evidence is required.
+**Files Changed:** `src/App.tsx`, `src/components/ReportSheet.tsx`, `src/components/OfficerDashboard.tsx`, `src/components/MapView.tsx`, `src/lib/liveApi.ts`, `src/styles.css`, `README.md`
+**Verification:** Root PWA `npm run build` passed. Database health and the issue-list endpoint succeeded with 26 seeded reports. No write-action smoke test was run.
+
+## Session: 2026-11-13 (Local ML Demo Provider)
+**Phase:** Phase 6 (TAS Scoring + AI Baselines) — IN PROGRESS
+**Completed:** Wired the existing multinomial Naive Bayes classifier into live M1 category suggestions as the default provider; added token-based explanation evidence; made Gemini opt-in with `AI_CATEGORY_PROVIDER=gemini`; added a keyword-rule fallback; updated the citizen UI and AI module documentation to identify the provider and synthetic-data limitations.
+**In Progress:** Run a live demo with sample English, Hindi, and Marathi reports; collect a real labeled set before making performance claims.
+**Blocked:** No blocker for local inference. Gemini remains unavailable unless a key is configured and the provider is explicitly selected.
+**Key Decisions:** Use the local model for the no-key demo so report text stays within the application server. Keep department routing, priority, duplicate scoring, proof flags, and issue closure rules deterministic. Do not expose Naive Bayes posterior values as calibrated confidence.
+**Next Session Should:** Start the app and manually exercise citizen category suggestions with representative English, Hindi, Marathi, and ambiguous descriptions; verify source labels show Local ML and keyword fallback appropriately.
+**Files Changed:** `nagardrishti-frontend/server/evaluation/trainedModel.ts`, `nagardrishti-frontend/server/ai/categorySuggestion.ts`, `nagardrishti-frontend/server/ai/orchestrator.ts`, `nagardrishti-frontend/server/config.ts`, `nagardrishti-frontend/.env.example`, `nagardrishti-frontend/docker-compose.prod.yml`, `nagardrishti-frontend/client/src/pages/citizen/CitizenPages.tsx`, `plans/04-ai-modules.md`, `plans/05-implementation-roadmap.md`, `plans/progress/SESSION_LOG.md`

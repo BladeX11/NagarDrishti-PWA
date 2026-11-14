@@ -134,9 +134,9 @@ Stable across UI, API, database, dataset, and paper.
 Start the PostgreSQL container:
 ```bash
 cd nagardrishti-frontend
-docker compose up -d
-npm run db:push
-npm run db:seed
+docker compose up -d postgres
+pnpm db:migrate
+pnpm db:seed
 ```
 
 ### 2. Backend Server
@@ -146,19 +146,23 @@ cd nagardrishti-frontend
 npm run dev:server
 ```
 
-### 3. Citizen PWA
-Runs on `http://localhost:5174` (proxies `/api` to backend):
+### 3. Citizen mobile-style PWA
+The standalone PWA source and package are in the repository root. It calls the shared API at `http://localhost:5000/api` by default and runs on `http://localhost:5173`:
 ```bash
-cd pwa
-npm run dev
+cd ..
+npm install
+npm run dev -- --host
 ```
+The citizen flow loads live reports, supports report submission with optional camera/gallery photo, requests location when the citizen chooses, and offers optional AI category suggestions. The officer demo actions advance issues through the backend workflow. Resolution notes do not attach proof photos.
 
 ### 4. Administrative / Public Dashboards
-Runs on `http://localhost:5173`:
+Runs on `http://localhost:3000`:
 ```bash
 cd nagardrishti-frontend
 npm run dev
 ```
+
+For phone installation and camera/location permissions, serve the PWA and API over HTTPS, set root `VITE_API_BASE_URL` to the reachable API URL, and allow the PWA origin in backend `CORS_ORIGINS`. The demo-role switch is development-only; production requires authenticated sessions.
 
 ---
 

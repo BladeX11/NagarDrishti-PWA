@@ -10,11 +10,11 @@
 
 | Module | Purpose | Current State | Target |
 |---|---|---|---|
-| M1 | Category Classification | Rule-based keyword matching | TF-IDF baseline -> MuRIL if time |
+| M1 | Category Classification | Local multinomial Naive Bayes trained on synthetic benchmark data; keyword rules fallback | TF-IDF baseline -> MuRIL if time |
 | M2 | Department Routing | Category-to-dept lookup table | Rule baseline + historical pattern |
-| M3 | Duplicate Detection | Haversine + category match | + TF-IDF text similarity + pHash |
+| M3 | Duplicate Detection | Haversine + category match + TF-IDF cosine text similarity | + pHash |
 | M4 | Priority/Urgency Ranking | Rule-based (safety + age) | + N2 Trust Score signals |
-| M5 | Image Severity | Not implemented | MobileNet lightweight classifier |
+| M5 | Image Severity | No severity model; optional Gemini image-assisted category suggestion is advisory only | MobileNet lightweight classifier |
 | M6 | Proof-of-Fix Plausibility | Stub only | + N3 adversarial rules |
 | M7 | Analytics/Scorecards | Scorecard service exists | + TAS computation + equity |
 
@@ -26,6 +26,12 @@
 | N3-AI | Adversarial Proof Detection | pHash + EXIF + temporal + bulk anomaly |
 | N4-AI | Cascade Detection | DBSCAN clustering + co-occurrence |
 | N6-AI | Code-Mixed NLP | MuRIL-based classification (stretch) |
+
+### Demo Provider Configuration
+
+- The default demo provider is an in-process multinomial Naive Bayes classifier trained at startup on synthetic benchmark data across the eight approved categories and three languages. Benchmark examples are split by context-template family; this is still synthetic data, not a real-world validation set, and its posterior is not shown to citizens as calibrated confidence.
+- Set `AI_CATEGORY_PROVIDER=gemini` and configure the server-only `GEMINI_API_KEY` to use Gemini instead. Gemini output is schema-validated and falls back to the local classifier on timeout, provider errors, or invalid output. In this mode, an attached report photo may be sent with the text for an advisory category suggestion; the citizen flow discloses this. The local model accepts text only.
+- The keyword classifier remains the final fallback if the local model cannot produce a suggestion.
 
 ---
 
@@ -40,7 +46,7 @@ Fallback: citizen manually selects category
 ```
 
 ### Training Data
-- 500+ synthetic complaints (50+ per category, 3 languages)
+- Current demo benchmark: 360 generated reports (45 per category, three languages), split 216/72/72 by context-template family. Category phrases remain shared across splits, so results are not an independent real-world test.
 - Format: `{ text, language, category, source: "synthetic" }`
 - Split: 70/15/15 (train/val/test), stratified by category
 
@@ -84,8 +90,10 @@ Enhancement: if historical data shows ward-specific routing overrides, apply the
 ## M3: Duplicate Detection (Enhanced)
 
 ### Current State
-- Haversine distance + category match only
-- No text similarity, no image similarity
+- Haversine distance + category match + TF-IDF text similarity in live candidates and graph edges
+- No perceptual image similarity
+
+Text similarity uses smoothed TF-IDF cosine similarity over the current issue/candidate corpus. The synthetic evaluation uses same-location negative pairs and reports its synthetic provenance; real labeled duplicate pairs are still needed for a useful quality estimate.
 
 ### Enhanced Pipeline
 

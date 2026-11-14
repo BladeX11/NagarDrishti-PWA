@@ -39,5 +39,29 @@ export function predictTrainedCategory(text: string) {
   const max = scores[0].score;
   const probabilities = scores.map((item) => ({ ...item, probability: Math.exp(item.score - max) }));
   const normalizer = probabilities.reduce((sum, item) => sum + item.probability, 0);
-  return { label: probabilities[0].label, confidence: probabilities[0].probability / normalizer, vocabularySize: model.vocabulary.size, trainingRecords: benchmarkCases.filter((item) => item.split === 'train').length };
+  const label = probabilities[0].label;
+  const labelCounts = model.counts.get(label)!;
+  const evidenceTerms = Array.from(new Set(tokens))
+    .map((token) => {
+      const labelProbability = ((labelCounts.get(token) ?? 0) + 1) / (model.totals.get(label)! + model.vocabulary.size);
+      const strongestAlternative = Math.max(...model.labels
+        .filter((candidate) => candidate !== label)
+        .map((candidate) => {
+          const counts = model.counts.get(candidate)!;
+          return ((counts.get(token) ?? 0) + 1) / (model.totals.get(candidate)! + model.vocabulary.size);
+        }));
+      return { token, evidence: Math.log(labelProbability / strongestAlternative) };
+    })
+    .filter((item) => item.evidence > 0)
+    .sort((left, right) => right.evidence - left.evidence)
+    .slice(0, 3)
+    .map((item) => item.token);
+
+  return {
+    label,
+    confidence: probabilities[0].probability / normalizer,
+    evidenceTerms,
+    vocabularySize: model.vocabulary.size,
+    trainingRecords: benchmarkCases.filter((item) => item.split === 'train').length,
+  };
 }

@@ -161,7 +161,7 @@ _Estimated effort: 2 sessions_
 
 ---
 
-## Phase 6: TAS Scoring + AI Baselines [NOT STARTED]
+## Phase 6: TAS Scoring + AI Baselines [IN PROGRESS]
 _Estimated effort: 2-3 sessions_
 
 > **Goal:** Transparency scores computed. AI modules have trained baselines.
@@ -174,9 +174,13 @@ _Estimated effort: 2-3 sessions_
 | 6.2 | TAS dashboard (color-coded bands per department) | `PublicPages.tsx` | NOT DONE |
 | 6.3 | Create synthetic training dataset (500+ complaints) | New: `ml/data/` | NOT DONE |
 | 6.4 | Train M1 category classifier (TF-IDF + LogReg) | New: `ml/train_m1.py` or `server/ai/` | NOT DONE |
-| 6.5 | Enhance M3 with TF-IDF text similarity | `server/ai/rules.ts`, `orchestrator.ts` | NOT DONE |
+| 6.5 | Enhance M3 with TF-IDF text similarity | `server/ai/rules.ts`, `orchestrator.ts`, `graph.ts` | DONE (synthetic benchmark only; image matching remains) |
 | 6.6 | Integrate Trust Score (N2) into M4 priority | `server/ai/rules.ts` | NOT DONE |
 | 6.7 | Write model cards | New: `ml/cards/` | NOT DONE |
+| 6.8 | Integrate optional server-side Gemini category suggestions with validated output and rules fallback | `server/ai/categorySuggestion.ts`, `server/routes/ai.ts`, `server/ai/orchestrator.ts` | DONE (API key required to enable Gemini) |
+| 6.9 | Wire trained local Naive Bayes classifier as the no-key demo provider | `server/evaluation/trainedModel.ts`, `server/ai/categorySuggestion.ts` | DONE (synthetic benchmark data; demo only) |
+| 6.10 | Add disclosed Gemini photo-assisted category suggestions | `server/ai/categorySuggestion.ts`, `server/routes/ai.ts`, citizen report flow | DONE (advisory category only; no proof/severity vision) |
+| 6.11 | Hold out report-context templates and expose synthetic benchmark provenance | `server/evaluation/benchmark.ts`, `runner.ts` | DONE (still requires real labeled data for external validity) |
 
 ### Done When
 - [ ] TAS scores visible on public dashboard

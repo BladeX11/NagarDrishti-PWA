@@ -357,13 +357,15 @@ export function ReportFlow() {
   const [submitting, setSubmitting] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<{
     category: Category;
-    confidence: number;
-    department: string;
+    reason: string;
+    source: "gemini" | "local-ml" | "rules" | null;
+    modelVersion: string;
     loading: boolean;
   }>({
     category: "pothole/road",
-    confidence: 0,
-    department: "Roads Department",
+    reason: "",
+    source: null,
+    modelVersion: "",
     loading: false,
   });
   const [apiDuplicates, setApiDuplicates] = useState<ApiIssue[]>([]);
@@ -406,9 +408,9 @@ export function ReportFlow() {
     location,
   ]);
 
-  async function runClassify(text: string) {
+  async function runClassify(text: string, languageName: string) {
     if (!text.trim()) return;
-    setAiSuggestion(s => ({ ...s, loading: true }));
+    setAiSuggestion(s => ({ ...s, reason: "", source: null, loading: true }));
     try {
       const res = await fetch("/api/ai/classify", {
         method: "POST",
@@ -416,22 +418,22 @@ export function ReportFlow() {
           "Content-Type": "application/json",
           "x-demo-role": localStorage.getItem("nd-role") || "citizen",
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, language: languageName, category, imageDataUrl: photo || undefined }),
       });
       const json = await res.json();
-      if (json.success) {
-        const { category: sugCat, confidence: conf } = json.data;
-        const sugCatTyped = sugCat as Category;
+      if (json.success && json.data) {
         setAiSuggestion({
-          category: sugCatTyped,
-          confidence: conf,
-          department: categoryDepartmentFor(sugCatTyped),
+          category: json.data.category as Category,
+          reason: json.data.reason,
+          source: json.data.source,
+          modelVersion: json.data.modelVersion,
           loading: false,
         });
-        setCategory(sugCatTyped);
+      } else {
+        setAiSuggestion(s => ({ ...s, reason: "Category suggestion is unavailable. Keep or choose a category manually.", loading: false }));
       }
     } catch {
-      setAiSuggestion(s => ({ ...s, loading: false }));
+      setAiSuggestion(s => ({ ...s, reason: "Category suggestion is unavailable. Keep or choose a category manually.", loading: false }));
     }
   }
 
@@ -480,12 +482,11 @@ export function ReportFlow() {
     const dataUrl = await compressImage(file);
     if (dataUrl) {
       setPhoto(dataUrl);
-      runClassify(file.name.replace(/[._-]/g, " ") + " " + file.type);
     }
   };
   const go = (next: number) => setStep(Math.max(0, Math.min(6, next)));
   const handleNext = async () => {
-    if (step === 3 && description.trim()) await runClassify(description);
+    if (step === 3 && description.trim()) await runClassify(description, language);
     if (step === 4) {
       // Fetch real similar issues from the DB when entering duplicates step
       setSelectedDuplicate(false);
@@ -687,29 +688,10 @@ export function ReportFlow() {
                 </button>
               ))}
             </div>
-            {aiSuggestion.confidence > 0 ? (
-              <div className="mt-5 border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-xs">
-                <Sparkles size={14} className="mr-1 inline text-[#4F5B2A]" />
-                <b>AI suggests:</b>{" "}
-                <span className="font-black">{aiSuggestion.category}</span>{" "}
-                <span className="text-[#2A3320]/60">
-                  ({aiSuggestion.confidence}% confidence · M1-rules-v0.1)
-                </span>
-                <button
-                  onClick={() => setCategory(aiSuggestion.category)}
-                  className="ml-3 border border-[#4F5B2A] bg-[#4F5B2A] px-2 py-0.5 text-[9px] font-black uppercase text-white"
-                >
-                  Apply
-                </button>
-              </div>
-            ) : (
-              <div className="mt-5 border-2 border-[#D8C9A8] bg-[#D8C9A8]/40 p-3 text-xs text-[#2A3320]/60">
-                <Sparkles size={14} className="mr-1 inline" />
-                <i>
-                  Add a description first — AI will suggest the best category.
-                </i>
-              </div>
-            )}
+            <div className="mt-5 border-2 border-[#D8C9A8] bg-[#D8C9A8]/40 p-3 text-xs text-[#2A3320]/60">
+              <Sparkles size={14} className="mr-1 inline" />
+              <i>Describe the issue in the next step to get an optional category suggestion.</i>
+            </div>
           </div>
         )}
         {step === 3 && (
@@ -742,6 +724,9 @@ export function ReportFlow() {
                 {description.length} / 500
               </span>
             </div>
+            <p className="mt-3 text-[10px] leading-relaxed text-[#2A3320]/55">
+              When Gemini is selected and configured, this description and any attached photo are sent to Google for an advisory category suggestion. The local model receives text only and runs on this server; photos are not sent to Gemini in local mode. Suggestions are optional; avoid personal contact details and review the result.
+            </p>
           </div>
         )}
         {step === 4 && (
@@ -753,40 +738,36 @@ export function ReportFlow() {
               </p>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-[#2A3320]/65">
-              Based on your photo and description. You can change any
-              suggestion.
+              Suggestions are advisory. Keep your selected category or apply the suggested one.
             </p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3">
-                <p className="eyebrow">Category</p>
-                <p className="mt-2 text-sm font-black">{category} ✓</p>
+                <p className="eyebrow">Your selected category</p>
+                <p className="mt-2 text-sm font-black">{category}</p>
               </div>
               <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3">
-                <p className="eyebrow">Department</p>
-                <p className="mt-2 text-sm font-black">
-                  {aiSuggestion.confidence > 0
-                    ? aiSuggestion.department
-                    : categoryDepartmentFor(category)}{" "}
-                  ✓
-                </p>
-              </div>
-              <div className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3">
-                <p className="eyebrow">Urgency</p>
-                <p className="mt-2 text-sm font-black">Tier 2 · High ✓</p>
+                <p className="eyebrow">Suggested category</p>
+                {aiSuggestion.source ? (
+                  <>
+                    <p className="mt-2 text-sm font-black">{aiSuggestion.category}</p>
+                    <p className="mt-2 text-xs leading-relaxed text-[#2A3320]/65">{aiSuggestion.reason}</p>
+                    <p className="mt-2 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/50">
+                      {aiSuggestion.source === "gemini" ? "Gemini" : aiSuggestion.source === "local-ml" ? "Local ML" : "Rules fallback"} · {aiSuggestion.modelVersion}
+                    </p>
+                    <button
+                      onClick={() => setCategory(aiSuggestion.category)}
+                      className="mt-3 border border-[#4F5B2A] bg-[#4F5B2A] px-2 py-1 text-[9px] font-black uppercase text-white"
+                    >
+                      Apply suggestion
+                    </button>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs leading-relaxed text-[#2A3320]/65">
+                    {aiSuggestion.loading ? "Checking the description…" : aiSuggestion.reason || "Add a description to receive a suggestion. You can choose a category manually."}
+                  </p>
+                )}
               </div>
             </div>
-            <div className="mt-5 flex flex-wrap justify-between gap-3 border-t-2 border-[#D8C9A8] pt-4 text-[10px] font-bold uppercase tracking-widest">
-              <span>
-                Confidence:{" "}
-                {aiSuggestion.confidence > 0 ? aiSuggestion.confidence : 87}%
-              </span>
-              <span>Model: M1 v0.3</span>
-            </div>
-            {aiSuggestion.confidence > 0 && (
-              <p className="mt-3 text-[10px] text-[#2A3320]/55">
-                Not right? Go back to step 3 and update your category choice.
-              </p>
-            )}
           </div>
         )}
         {step === 5 && (

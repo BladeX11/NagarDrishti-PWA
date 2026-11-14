@@ -1,7 +1,7 @@
 const STOP_WORDS = new Set(['the', 'and', 'near', 'with', 'for', 'this', 'that', 'has', 'have', 'from', 'पर', 'और', 'के']);
 
 export function normalizeText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
 }
 
 export function tokens(value: string): Set<string> {
@@ -15,6 +15,31 @@ export function jaccardSimilarity(left: string, right: string): number {
   const intersection = Array.from(a).filter((token) => b.has(token)).length;
   const union = new Set(Array.from(a).concat(Array.from(b))).size;
   return union === 0 ? 0 : intersection / union;
+}
+
+/** Smoothed TF-IDF cosine similarity over the provided candidate corpus. */
+export function tfidfCosineSimilarity(left: string, right: string, corpus: string[] = [left, right]): number {
+  const documents = [...corpus, left, right].map((text) => Array.from(tokens(text)));
+  const documentFrequency = new Map<string, number>();
+  for (const document of documents) {
+    for (const token of new Set(document)) documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1);
+  }
+  const vector = (document: string[]) => {
+    const frequency = new Map<string, number>();
+    for (const token of document) frequency.set(token, (frequency.get(token) ?? 0) + 1);
+    const result = new Map<string, number>();
+    for (const [token, count] of frequency) {
+      const idf = Math.log(1 + documents.length / (1 + (documentFrequency.get(token) ?? 0)));
+      result.set(token, (count / document.length) * idf);
+    }
+    return result;
+  };
+  const a = vector(documents[documents.length - 2]);
+  const b = vector(documents[documents.length - 1]);
+  const dot = Array.from(a).reduce((sum, [token, weight]) => sum + weight * (b.get(token) ?? 0), 0);
+  const normA = Math.sqrt(Array.from(a.values()).reduce((sum, value) => sum + value * value, 0));
+  const normB = Math.sqrt(Array.from(b.values()).reduce((sum, value) => sum + value * value, 0));
+  return normA && normB ? dot / (normA * normB) : 0;
 }
 
 export function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
