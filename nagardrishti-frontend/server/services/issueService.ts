@@ -316,6 +316,8 @@ export const issueService = {
     category?: string;
     wardId?: string;
     departmentId?: string;
+    reporterId?: string;
+    mine?: string | boolean;
     page?: number;
     limit?: number;
   }, currentUserId?: string) {
@@ -329,6 +331,10 @@ export const issueService = {
     if (filters.category) conditions.push(eq(issues.category, filters.category));
     if (filters.wardId) conditions.push(eq(issues.wardId, filters.wardId));
     if (filters.departmentId) conditions.push(eq(issues.departmentId, filters.departmentId));
+    if (filters.reporterId) conditions.push(eq(issues.reporterId, filters.reporterId));
+    if ((filters.mine === 'true' || filters.mine === true) && currentUserId) {
+      conditions.push(eq(issues.reporterId, currentUserId));
+    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

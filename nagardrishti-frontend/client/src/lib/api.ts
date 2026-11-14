@@ -120,6 +120,8 @@ export const issuesApi = {
     category?: string;
     wardId?: string;
     departmentId?: string;
+    reporterId?: string;
+    mine?: boolean;
     page?: number;
     limit?: number;
   }) {
@@ -128,6 +130,8 @@ export const issuesApi = {
     if (params?.category) qs.set('category', params.category);
     if (params?.wardId) qs.set('wardId', params.wardId);
     if (params?.departmentId) qs.set('departmentId', params.departmentId);
+    if (params?.reporterId) qs.set('reporterId', params.reporterId);
+    if (params?.mine) qs.set('mine', 'true');
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
     return request<ApiIssueList>(`/issues?${qs}`);

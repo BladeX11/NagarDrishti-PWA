@@ -66,7 +66,7 @@ export function ReportFlow(){
     }
   },[step,category,location,description]);
 
-  async function runClassify(text:string){
+  async function runClassify(text:string, autoApply: boolean = false){
     if(!text.trim())return;
     setAiSuggestion(s=>({...s,loading:true}));
     try{
@@ -76,7 +76,9 @@ export function ReportFlow(){
         const {category:sugCat,confidence:conf}=json.data;
         const sugCatTyped=sugCat as Category;
         setAiSuggestion({category:sugCatTyped,confidence:conf,department:categoryDepartmentFor(sugCatTyped),loading:false});
-        setCategory(sugCatTyped);
+        if (autoApply) {
+          setCategory(sugCatTyped);
+        }
       }
     }catch{setAiSuggestion(s=>({...s,loading:false}));}
   }
@@ -121,12 +123,12 @@ export function ReportFlow(){
     const dataUrl=await compressImage(file);
     if(dataUrl){
       setPhoto(dataUrl);
-      runClassify(file.name.replace(/[._-]/g,' ')+' '+file.type);
+      runClassify(file.name.replace(/[._-]/g,' ')+' '+file.type, false);
     }
   };
   const go=(next:number)=>setStep(Math.max(0,Math.min(6,next)));
   const handleNext=async()=>{
-    if(step===3 && description.trim()) await runClassify(description);
+    if(step===3 && description.trim()) await runClassify(description, false);
     if(step===4){
       setSelectedDuplicate(false);
       setLoadingDuplicates(true);
@@ -142,7 +144,7 @@ export function ReportFlow(){
     <PageHeader eyebrow="Community reporting" title="Report an issue" description="A short report helps your neighbourhood turn a concern into a visible, trackable action."/>
     <div className="mb-8 flex items-center">{steps.map((name,index)=><div key={name} className="flex flex-1 items-center last:flex-none"><button aria-label={`Step ${index+1}: ${name}`} onClick={()=>index<step&&go(index)} className={`flex h-8 w-8 shrink-0 items-center justify-center border-2 border-[#2A3320] text-[10px] font-black ${index<step?'bg-[#4F5B2A] text-white':index===step?'border-4 bg-[#B8892D] text-[#2A3320]':'bg-[#E8E0D0] text-[#2A3320]/45'}`}>{index<step?<Check size={14}/>:index+1}</button>{index<steps.length-1&&<div className={`mx-1 h-[2px] flex-1 ${index<step?'bg-[#4F5B2A]':'bg-[#D8C9A8]'}`}/>}</div>)}</div>
     <Panel className="border-4" padding="p-5 md:p-8"><div className="mb-6 flex items-center justify-between border-b-2 border-[#E8E0D0] pb-4"><div><p className="eyebrow">Step {step+1} of 7</p><h2 className="display-title mt-1 text-xl">{steps[step]}</h2></div><span className="text-[10px] font-black uppercase tracking-widest text-[#2A3320]/40">{Math.round((step+1)/7*100)}%</span></div>
-      {step===0&&<div><label className="flex min-h-64 cursor-pointer flex-col items-center justify-center border-4 border-dashed border-[#2A3320] bg-[#D8C9A8]/20 p-6 text-center transition-colors hover:bg-[#D8C9A8]/40">{photo?<img src={photo} alt="Selected report" className="max-h-56 max-w-full border-2 border-[#2A3320] object-contain"/>:<><Camera size={34}/><span className="display-title mt-4 text-xl">Tap to capture</span><span className="mt-2 text-xs text-[#2A3320]/60">or choose a photo from your gallery</span></>}<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={onPhoto}/></label><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-medium text-[#2A3320]/60">Photo is recommended but optional. Original photo metadata is not shared publicly.</p>{!photo&&<button type="button" onClick={()=>{const samplePhoto='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';setPhoto(samplePhoto);runClassify('sample pothole road damage photo');toast.success('Sample photo attached for demo.');}} className="border-2 border-[#2A3320] bg-white px-2 py-1 text-[9px] font-black uppercase tracking-wider text-[#4F5B2A] hover:bg-[#D8C9A8]">Use sample photo</button>}</div></div>}
+      {step===0&&<div><label className="flex min-h-64 cursor-pointer flex-col items-center justify-center border-4 border-dashed border-[#2A3320] bg-[#D8C9A8]/20 p-6 text-center transition-colors hover:bg-[#D8C9A8]/40">{photo?<img src={photo} alt="Selected report" className="max-h-56 max-w-full border-2 border-[#2A3320] object-contain"/>:<><Camera size={34}/><span className="display-title mt-4 text-xl">Tap to capture</span><span className="mt-2 text-xs text-[#2A3320]/60">or choose a photo from your gallery</span></>}<input type="file" accept="image/*" capture="environment" className="sr-only" onChange={onPhoto}/></label><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-medium text-[#2A3320]/60">Photo is recommended but optional. Original photo metadata is not shared publicly.</p>{!photo&&<button type="button" onClick={()=>{const samplePhoto='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';setPhoto(samplePhoto);runClassify('sample pothole road damage photo', true);toast.success('Sample photo attached for demo.');}} className="border-2 border-[#2A3320] bg-white px-2 py-1 text-[9px] font-black uppercase tracking-wider text-[#4F5B2A] hover:bg-[#D8C9A8]">Use sample photo</button>}</div></div>}
       {step===1&&(()=>{const locality=getNearestPuneLocality(location[0],location[1]);return <div><div className="mb-4 flex items-center gap-2 border-2 border-[#B8892D] bg-[#B8892D]/10 p-3 text-xs font-bold"><MapPin size={16}/><span>Selected area: <b>{locality.name}</b> ({locality.ward}). Tap map or use location to move pin.</span></div><MapView issues={seedIssues.slice(0,7)} height="270px" pinPosition={location} onPinChange={setLocation}/><div className="mt-4 flex flex-wrap gap-2"><Button variant="gold" onClick={()=>{if(!navigator.geolocation){toast.error('Location services are not available in this browser.');return;}navigator.geolocation.getCurrentPosition(position=>{setLocation([Math.round(position.coords.latitude*200)/200,Math.round(position.coords.longitude*200)/200]);toast.success('Your approximate location is set.');},()=>toast.error('Location could not be accessed. You can place the pin manually.'),{enableHighAccuracy:false,timeout:8000,maximumAge:300000});}}>Use my location</Button><Button variant="outline" onClick={()=>toast.info('Tap anywhere on the map to place the approximate pin.')}>Place manually</Button></div><p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-[#2A3320]/55">⌖ Public pin shows approximate area only · Location is rounded before it is saved</p></div>;})()}
       {step===2&&<div><p className="mb-4 text-sm text-[#2A3320]/65">Choose the closest category. The AI suggestion is editable.</p><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{categories.map(item=><button key={item} onClick={()=>setCategory(item)} className={`flex min-h-28 flex-col items-start justify-between border-4 p-3 text-left shadow-[4px_4px_0px_0px_#2A3320] transition-all ${category===item?'bg-[#4F5B2A] text-white':'bg-[#FDFBF7] text-[#2A3320] hover:-translate-y-1'}`}><CategoryIcon category={item} size={22}/><span className="text-[9px] font-black uppercase tracking-wider">{categoryNames[item]}</span></button>)}</div>
         {aiSuggestion.confidence>0?<div className="mt-5 border-2 border-[#4F5B2A] bg-[#4F5B2A]/10 p-3 text-xs"><Sparkles size={14} className="mr-1 inline text-[#4F5B2A]"/><b>AI suggests:</b> <span className="font-black">{aiSuggestion.category}</span> <span className="text-[#2A3320]/60">({aiSuggestion.confidence}% confidence · M1-rules-v0.1)</span><button onClick={()=>setCategory(aiSuggestion.category)} className="ml-3 border border-[#4F5B2A] bg-[#4F5B2A] px-2 py-0.5 text-[9px] font-black uppercase text-white">Apply</button></div>:<div className="mt-5 border-2 border-[#D8C9A8] bg-[#D8C9A8]/40 p-3 text-xs text-[#2A3320]/60"><Sparkles size={14} className="mr-1 inline"/><i>Add a description first — AI will suggest the best category.</i></div>}
@@ -241,7 +243,7 @@ export function MyReports(){
   const [filter,setFilter]=useState('All');
   const [apiIssues,setApiIssues]=useState<ApiIssue[]>([]);
   const filters=['All','Open','In Progress','Claimed Resolved','Verified Fixed','Reopened'];
-  useEffect(()=>{ issuesApi.list({limit:50}).then(r=>setApiIssues(r.items)).catch(()=>{}); },[]);
+  useEffect(()=>{ issuesApi.list({limit:50, mine: true}).then(r=>setApiIssues(r.items)).catch(()=>{}); },[]);
   const allReports=[...apiIssues,...getSubmittedReports().filter(s=>!apiIssues.some(a=>a.id===s.id||a.publicRef===s.id)),...(apiIssues.length===0?mine:[])];
   const data=allReports.filter((issue:any)=>filter==='All'||issue.status===filter).sort((a:any,b:any)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   return <div><PageHeader eyebrow="Citizen space" title="My reports" description="Follow the issues you've raised and see what has changed." action={<span className="border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[10px] font-black uppercase tracking-wider">{allReports.length} reports</span>}/><div className="mb-5 flex flex-wrap gap-2">{filters.map(name=><button key={name} onClick={()=>setFilter(name)} className={`border-2 border-[#2A3320] px-3 py-2 text-[9px] font-black uppercase tracking-wider ${filter===name?'bg-[#4F5B2A] text-white shadow-[3px_3px_0px_0px_#2A3320]':'bg-[#FDFBF7]'}`}>{name}</button>)}</div>{data.length?<div className="grid gap-5 md:grid-cols-2">{data.map((issue:any,index:number)=><div key={issue.id||issue.publicRef}><IssueCard issue={issue} index={index}/><p className="mt-3 flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-[#4F5B2A]"><i className="h-2 w-2 rounded-full bg-[#4F5B2A]"/>{apiIssues.length>0?'Live from database':'Submitted · Synced'}</p></div>)}</div>:<EmptyState icon={Camera} title="No reports in this view" description="Try a different status filter, or report the first issue in your neighbourhood." action={{label:'Report an issue →',href:'/citizen/report'}}/>}<DemoNote/></div>;

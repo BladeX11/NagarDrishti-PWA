@@ -73,12 +73,27 @@ function decodeGeohash(hash: string) {
   return { lat: (latMin + latMax) / 2, lng: (lonMin + lonMax) / 2 };
 }
 
-// Simple ward assignment based on lat/lng quadrant (demo purposes, Pune area)
+// Ward centroids aligned with MapView and official municipal wards
+const WARD_CENTROIDS: Record<string, [number, number]> = {
+  'ward-11': [18.5029, 73.8153], // Kothrud (West)
+  'ward-12': [18.5147, 73.8402], // Deccan Gymkhana (Central/West)
+  'ward-14': [18.5029, 73.8553], // Swargate (South/Central)
+  'ward-15': [18.5529, 73.9053], // Kalyani Nagar (East/North-East)
+};
+
 function deriveWard(lat: number, lng: number): string {
-  if (lat >= 18.52 && lng >= 73.86) return 'ward-12';
-  if (lat >= 18.52 && lng < 73.86) return 'ward-11';
-  if (lat < 18.52 && lng >= 73.86) return 'ward-15';
-  return 'ward-14';
+  let closestWard = 'ward-12';
+  let minDistanceSq = Infinity;
+  for (const [wardId, [wLat, wLng]] of Object.entries(WARD_CENTROIDS)) {
+    const dLat = (lat - wLat) * 111;
+    const dLng = (lng - wLng) * 111 * Math.cos((lat * Math.PI) / 180);
+    const distSq = dLat * dLat + dLng * dLng;
+    if (distSq < minDistanceSq) {
+      minDistanceSq = distSq;
+      closestWard = wardId;
+    }
+  }
+  return closestWard;
 }
 
 export const privacyService = {

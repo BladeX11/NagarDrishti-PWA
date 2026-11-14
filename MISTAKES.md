@@ -110,3 +110,10 @@
 **Context:** `client/src/pages/citizen/CitizenPages.tsx`, `client/src/components/shared/IssueCard.tsx`, `client/src/data/localDemo.ts`, and `server/db/seed.ts`
 **Solution:** Gated the submit fallback so validation and adversarial image rejections surface real error toasts; partitioned offline IDs to `ND-LOC-XXXX` to prevent collisions; aligned server seeds to match client issues `ND-101..ND-128`; and isolated static seed increments from persisted demo reports so supporter counts reflect exactly 1 vote per user.
 **Date:** 2026-10-30
+
+
+### City-Wide Report Leakage in My Reports, AI Overwriting Category, Inconsistent Wards, and Unbounded Localities
+**Problem:** `MyReports` queried all city-wide reports without a reporter filter; AI classification automatically overwrote user-selected categories on step 3; quadrant-based `deriveWard` contradicted official ward centroids; and out-of-boundary map pins were labeled with inner Pune neighborhood names.
+**Context:** `client/src/pages/citizen/CitizenPages.tsx`, `client/src/lib/api.ts`, `server/services/issueService.ts`, `server/services/privacyService.ts`, and `client/src/data/puneLocalities.ts`
+**Solution:** Added `mine: true` filtering across frontend and backend in `listIssues`; parameterized `runClassify` so AI suggestions display without overwriting explicit user choices; aligned `deriveWard` to assign wards by nearest centroid matching `MapView`; and added a 35 km boundary threshold falling back to "Greater Pune" for outlying coordinates.
+**Date:** 2026-10-30
