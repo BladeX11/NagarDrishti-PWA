@@ -95,14 +95,14 @@ export function MapView({ issues, selectedId, onSelectIssue, height = '520px', p
           return <Circle key={wardId} center={centroid} radius={1500} pathOptions={{ color: '#8B0000', weight: 2, fillColor: '#8B0000', fillOpacity: 0.2, dashArray: '4 4' }} />
         })}
       </MapContainer>
-      <div className="absolute bottom-3 left-3 z-[500] border-4 border-[#2A3320] bg-[#FDFBF7] p-3 shadow-[3px_3px_0px_0px_#2A3320]">
+      <div className="absolute bottom-2.5 left-2.5 z-[500] max-w-[calc(100%-1.25rem)] border-2 border-[#2A3320] bg-[#FDFBF7]/95 p-2.5 shadow-[3px_3px_0px_0px_#2A3320] md:bottom-3 md:left-3 md:border-4 md:p-3">
         {publicView ? (
           <>
-            <p className="mb-2 text-[9px] font-black uppercase tracking-widest">Inaction tier</p>
-            <div className="flex flex-col gap-1 text-[9px] font-bold">
+            <p className="mb-1.5 text-[11px] font-black uppercase tracking-wider sm:text-[9px] sm:tracking-widest">Inaction tier</p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-bold sm:flex-col sm:text-[9px]">
               {TIER_LABELS.map((label, i) => (
                 <span key={label} className="flex items-center gap-1">
-                  <i className="h-2.5 w-2.5 rounded-full border border-[#2A3320]" style={{ backgroundColor: TIER_COLORS[i] }} />
+                  <i className="h-2.5 w-2.5 shrink-0 rounded-full border border-[#2A3320]" style={{ backgroundColor: TIER_COLORS[i] }} />
                   T{i}: {label}
                 </span>
               ))}
@@ -110,14 +110,14 @@ export function MapView({ issues, selectedId, onSelectIssue, height = '520px', p
           </>
         ) : (
           <>
-            <p className="mb-2 text-[9px] font-black uppercase tracking-widest">Issue status</p>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[9px] font-bold">
-              {[['Open', '#B8892D'], ['In progress', '#4F5B2A'], ['Resolved', '#2A3320']].map(([label, color]) => <span key={label} className="flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-full border border-[#2A3320]" style={{ backgroundColor: color }} />{label}</span>)}
+            <p className="mb-1.5 text-[11px] font-black uppercase tracking-wider sm:text-[9px] sm:tracking-widest">Issue status</p>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-bold sm:text-[9px]">
+              {[['Open', '#B8892D'], ['In progress', '#4F5B2A'], ['Resolved', '#2A3320']].map(([label, color]) => <span key={label} className="flex items-center gap-1"><i className="h-2.5 w-2.5 shrink-0 rounded-full border border-[#2A3320]" style={{ backgroundColor: color }} />{label}</span>)}
             </div>
           </>
         )}
       </div>
-      {publicView && <div className="absolute right-3 top-3 z-[500] border-2 border-[#2A3320] bg-[#FDFBF7] px-3 py-2 text-[9px] font-black uppercase tracking-wider">⌖ Public pins are coarsened</div>}
+      {publicView && <div className="absolute right-2.5 top-2.5 z-[500] border-2 border-[#2A3320] bg-[#FDFBF7]/95 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider sm:right-3 sm:top-3 sm:px-3 sm:py-2 sm:text-[9px]">⌖ Coarsened pins</div>}
     </div>
   );
 }

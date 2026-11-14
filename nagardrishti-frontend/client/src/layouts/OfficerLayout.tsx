@@ -16,9 +16,27 @@ export function OfficerLayout(){
       <div className="border-t-2 border-white/20 p-4"><Link to="/" className="block py-2 text-[10px] font-bold uppercase tracking-wider text-white/70">← Back to home</Link><Link to="/citizen" className="flex items-center justify-between bg-[#3A4420] px-3 py-3 text-[10px] font-black uppercase tracking-wider">Switch to citizen <ChevronRight size={14}/></Link></div>
     </aside>
     {menu&&<button aria-label="Close menu" className="fixed inset-0 z-40 bg-[#2A3320]/55 lg:hidden" onClick={()=>setMenu(false)}/>}
-    <div className="min-h-screen lg:pl-72">
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b-4 border-[#2A3320] bg-[#F5EFE3] px-4 sm:px-6 lg:px-8"><button className="border-2 border-[#2A3320] bg-[#FDFBF7] p-2 lg:hidden" aria-label="Open navigation" onClick={()=>setMenu(!menu)}><Menu size={18}/></button><div className="min-w-0"><p className="display-title text-sm">Good morning, Priya.</p><p className="hidden text-[9px] font-bold uppercase tracking-widest text-[#2A3320]/50 sm:block">Ward operations console</p></div><div className="ml-auto hidden max-w-xs flex-1 items-center gap-2 border-2 border-[#2A3320] bg-white px-3 py-2 md:flex"><Search size={14}/><input aria-label="Search issues" value={search} onChange={event=>setSearch(event.target.value)} onKeyDown={handleSearch} placeholder="Search issues or IDs…" className="w-full border-0 bg-transparent text-xs outline-none"/></div><Link to="/citizen" className="hidden border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[9px] font-black uppercase tracking-wider sm:block">Citizen view</Link><Link to="/citizen/notifications" aria-label="Notifications" className="border-2 border-[#2A3320] bg-[#FDFBF7] p-2"><Bell size={16}/></Link></header>
-      <main className="mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-6 lg:px-8 lg:pt-9"><Outlet/><p className="mt-9 border-t-2 border-[#D8C9A8] pt-4 text-[9px] font-bold uppercase tracking-[.16em] text-[#2A3320]/50">Demo console · Synthetic records · <ShieldCheck className="inline" size={12}/> privacy-coarsened location</p></main>
+    <div className="min-h-dvh lg:pl-72">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b-2 border-[#2A3320] bg-[#F5EFE3] px-4 sm:px-6 lg:border-b-4 lg:px-8">
+        <button className="flex h-11 w-11 items-center justify-center border-2 border-[#2A3320] bg-[#FDFBF7] lg:hidden" aria-label="Open navigation" onClick={()=>setMenu(!menu)}><Menu size={18}/></button>
+        <div className="min-w-0">
+          <p className="display-title truncate text-sm">Good morning, Priya.</p>
+          <p className="hidden text-[9px] font-bold uppercase tracking-widest text-[#2A3320]/50 sm:block">Ward operations console</p>
+        </div>
+        <div className="ml-auto hidden max-w-xs flex-1 items-center gap-2 border-2 border-[#2A3320] bg-white px-3 py-2 md:flex">
+          <Search size={14}/>
+          <input aria-label="Search issues" value={search} onChange={event=>setSearch(event.target.value)} onKeyDown={handleSearch} placeholder="Search issues or IDs…" className="w-full border-0 bg-transparent text-xs outline-none"/>
+        </div>
+        <Link to="/citizen" className="hidden border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[9px] font-black uppercase tracking-wider sm:block">Citizen view</Link>
+        <Link to="/citizen/notifications" aria-label="Notifications" className="ml-auto flex h-11 w-11 items-center justify-center border-2 border-[#2A3320] bg-[#FDFBF7] md:ml-0"><Bell size={18}/></Link>
+      </header>
+      <div className="border-b-2 border-[#2A3320] bg-[#FDFBF7] px-4 py-2.5 md:hidden">
+        <label className="flex min-h-[44px] items-center gap-2 border-2 border-[#2A3320] bg-white px-3">
+          <Search size={16}/>
+          <input aria-label="Search issues on mobile" value={search} onChange={event=>setSearch(event.target.value)} onKeyDown={handleSearch} placeholder="Search issue ID (e.g. ND-104)…" className="w-full border-0 bg-transparent text-xs outline-none"/>
+        </label>
+      </div>
+      <main className="mx-auto max-w-[1440px] px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:pt-9"><Outlet/><p className="mt-9 border-t-2 border-[#D8C9A8] pt-4 text-xs font-bold uppercase tracking-wider text-[#2A3320]/55 sm:text-[9px]">Demo console · Synthetic records · <ShieldCheck className="inline" size={12}/> privacy-coarsened location</p></main>
     </div>
   </div>;
 }

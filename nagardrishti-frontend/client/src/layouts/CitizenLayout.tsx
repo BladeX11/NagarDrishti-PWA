@@ -1,20 +1,20 @@
-import { Bell, Camera, Compass, Home, ListChecks, Plus, Settings, ChevronRight } from 'lucide-react';
+import { Bell, Camera, Compass, Home, ListChecks, MoreHorizontal, Plus, Settings, ChevronRight, X } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { InstallPrompt } from '../components/shared/InstallPrompt';
 import { PushOptIn } from '../components/shared/PushOptIn';
 
 const links = [
-  { to: '/citizen',              label: 'Home',        icon: Home,       end: true  },
-  { to: '/citizen/explore',      label: 'Explore map', icon: Compass,    end: false },
-  { to: '/citizen/report',       label: 'Report',      icon: Camera,     end: false },
-  { to: '/citizen/my-reports',   label: 'My reports',  icon: ListChecks, end: false },
-  { to: '/citizen/notifications', label: 'Notifications', icon: Bell,    end: false },
-  { to: '/citizen/settings',     label: 'Settings',    icon: Settings,   end: false },
+  { to: '/citizen',               label: 'Home',          shortLabel: 'Home',    icon: Home,       end: true  },
+  { to: '/citizen/explore',       label: 'Explore map',   shortLabel: 'Explore', icon: Compass,    end: false },
+  { to: '/citizen/report',        label: 'Report',        shortLabel: 'Report',  icon: Camera,     end: false },
+  { to: '/citizen/my-reports',    label: 'My reports',    shortLabel: 'Reports', icon: ListChecks, end: false },
+  { to: '/citizen/notifications', label: 'Notifications', shortLabel: 'Alerts',  icon: Bell,       end: false },
+  { to: '/citizen/settings',      label: 'Settings',      shortLabel: 'Settings', icon: Settings,  end: false },
 ];
 
-// Bottom nav items: Home | Explore | [FAB: Report] | My Reports | More
-const BOTTOM_NAV = [links[0], links[1], null, links[3], links[4]]; // null = FAB slot
+// Bottom nav items: Home | Explore | [FAB: Report] | Reports | More
+const BOTTOM_NAV = [links[0], links[1], null, links[3], 'more'] as const;
 
 function Mark() {
   return <span className="flex items-center gap-1.5" aria-hidden="true"><i className="h-2.5 w-2.5 rounded-full bg-[#B8892D]"/><i className="h-2.5 w-2.5 bg-[#D8C9A8]"/><i className="h-0 w-0 border-x-[6px] border-b-[10px] border-x-transparent border-b-white"/></span>;
@@ -29,7 +29,7 @@ export function CitizenLayout() {
   const hideNav = HIDE_NAV_PATHS.some(p => pathname.startsWith(p));
 
   return (
-    <div className="min-h-screen bg-[#F5EFE3] text-[#2A3320]">
+    <div className="min-h-dvh bg-[#F5EFE3] text-[#2A3320]">
       {/* Desktop sidebar — hidden on mobile */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r-4 border-[#2A3320] bg-[#4F5B2A] text-white lg:flex">
         <Link to="/" className="flex items-center gap-3 border-b-2 border-white/20 p-6">
@@ -50,21 +50,57 @@ export function CitizenLayout() {
       </aside>
 
       {/* Main content area */}
-      <div className="min-h-screen lg:pl-64">
-        {/* Top header — visible on all screen sizes */}
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b-4 border-[#2A3320] bg-[#F5EFE3] px-4 sm:px-6 lg:h-[72px] lg:px-8">
-          <Link to="/" className="flex items-center gap-2 lg:hidden"><Mark/><span className="display-title text-sm">NagarDrishti</span></Link>
-          <p className="hidden text-xs font-bold uppercase tracking-widest text-[#2A3320]/50 lg:block">Pune · Ward 12 <span className="mx-2">/</span> Citizen space</p>
-          <div className="ml-auto flex items-center gap-2">
-            <Link aria-label="Notifications" to="/citizen/notifications" className="border-2 border-[#2A3320] bg-[#FDFBF7] p-2.5 hover:bg-[#E8E0D0]"><Bell size={17}/></Link>
-            <Link aria-label="Settings" to="/citizen/settings" className="border-2 border-[#2A3320] bg-[#FDFBF7] p-2.5 hover:bg-[#E8E0D0]"><Settings size={17}/></Link>
-            <Link to="/transparency" className="hidden border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[9px] font-black uppercase tracking-wider sm:block">Public view</Link>
+      <div className="min-h-dvh lg:pl-64">
+        {/* Top header — slim on mobile, full actions on tablet/desktop */}
+        {!hideNav && (
+          <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b-2 border-[#2A3320] bg-[#F5EFE3] px-3.5 sm:px-6 lg:h-[72px] lg:border-b-4 lg:px-8">
+            <Link to="/" className="flex min-h-[44px] items-center gap-2 lg:hidden">
+              <Mark/>
+              <span className="display-title text-sm">NagarDrishti</span>
+            </Link>
+            <p className="hidden text-xs font-bold uppercase tracking-widest text-[#2A3320]/50 lg:block">
+              Pune · Ward 12 <span className="mx-2">/</span> Citizen space
+            </p>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="border-2 border-[#2A3320] bg-[#D8C9A8] px-2.5 py-1 text-xs font-bold lg:hidden">
+                Ward 12
+              </span>
+              <Link
+                aria-label="Notifications"
+                to="/citizen/notifications"
+                className="flex h-11 w-11 items-center justify-center border-2 border-[#2A3320] bg-[#FDFBF7] hover:bg-[#E8E0D0]"
+              >
+                <Bell size={18}/>
+              </Link>
+              <Link
+                aria-label="Settings"
+                to="/citizen/settings"
+                className="hidden h-11 w-11 items-center justify-center border-2 border-[#2A3320] bg-[#FDFBF7] hover:bg-[#E8E0D0] lg:flex"
+              >
+                <Settings size={17}/>
+              </Link>
+              <Link
+                to="/transparency"
+                className="hidden border-2 border-[#2A3320] bg-[#D8C9A8] px-3 py-2 text-[9px] font-black uppercase tracking-wider sm:block"
+              >
+                Public view
+              </Link>
+              <div className="hidden sm:block">
+                <PushOptIn />
+              </div>
+            </div>
+          </header>
+        )}
+
+        {/* Mobile push opt-in placed below header so it never crowds the 56px top bar */}
+        {!hideNav && (
+          <div className="px-4 pt-3 sm:hidden [&:empty]:hidden">
             <PushOptIn />
           </div>
-        </header>
+        )}
 
         {/* Page content — extra bottom padding on mobile to clear the nav */}
-        <main className={`mx-auto max-w-6xl px-4 pt-6 sm:px-6 lg:px-8 lg:pb-10 lg:pt-9 ${hideNav ? 'pb-0' : 'pb-28 lg:pb-10'}`}>
+        <main className={`mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 lg:pb-10 lg:pt-9 ${hideNav ? 'py-0' : 'pt-5 pb-28 lg:pb-10'}`}>
           <Outlet/>
         </main>
 
@@ -75,23 +111,38 @@ export function CitizenLayout() {
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
             aria-label="Main navigation"
           >
-            <div className="grid grid-cols-5 border-t-4 border-[#2A3320] bg-[#FDFBF7]">
-              {BOTTOM_NAV.map((item, idx) => {
-                // Centre slot: FAB report button
+            <div className="grid grid-cols-5 border-t-2 border-[#2A3320] bg-[#FDFBF7]">
+              {BOTTOM_NAV.map(item => {
                 if (item === null) {
                   return (
                     <div key="fab" className="relative flex items-center justify-center">
-                      {/* Raised FAB sits above the nav bar */}
                       <Link
                         to="/citizen/report"
                         aria-label="Report a new issue"
-                        className="absolute -top-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-[#2A3320] bg-[#B8892D] text-white shadow-[4px_4px_0px_0px_#2A3320] transition-transform active:scale-95"
+                        onClick={() => setMore(false)}
+                        className="absolute -top-5 flex h-14 w-14 items-center justify-center rounded-full border-4 border-[#2A3320] bg-[#B8892D] text-[#2A3320] shadow-[3px_3px_0px_0px_#2A3320] transition-transform active:scale-95"
                       >
-                        <Plus size={22} strokeWidth={2.5} aria-hidden="true"/>
+                        <Plus size={24} strokeWidth={2.75} aria-hidden="true"/>
                       </Link>
-                      {/* Spacer so the grid col has height */}
-                      <span className="block h-[62px]"/>
+                      <span className="block h-[60px]"/>
                     </div>
+                  );
+                }
+                if (item === 'more') {
+                  return (
+                    <button
+                      key="more"
+                      type="button"
+                      aria-expanded={more}
+                      aria-label="More navigation options"
+                      onClick={() => setMore(open => !open)}
+                      className={`flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-black uppercase tracking-wide ${
+                        more ? 'text-[#4F5B2A]' : 'text-[#2A3320]/65'
+                      }`}
+                    >
+                      <MoreHorizontal size={20} strokeWidth={2.2} aria-hidden="true"/>
+                      <span>More</span>
+                    </button>
                   );
                 }
                 return (
@@ -99,14 +150,17 @@ export function CitizenLayout() {
                     key={item.to}
                     to={item.to}
                     end={item.end}
+                    onClick={() => setMore(false)}
                     className={({ isActive }) =>
-                      `flex min-h-[62px] flex-col items-center justify-center gap-1 text-[9px] font-black uppercase tracking-wide ${isActive ? 'text-[#4F5B2A]' : 'text-[#2A3320]/50'}`
+                      `flex min-h-[60px] flex-col items-center justify-center gap-1 text-[11px] font-black uppercase tracking-wide ${
+                        isActive ? 'text-[#4F5B2A]' : 'text-[#2A3320]/65'
+                      }`
                     }
                   >
                     {({ isActive }) => (
                       <>
-                        <item.icon size={19} strokeWidth={isActive ? 2.5 : 1.5} aria-hidden="true"/>
-                        <span>{item.label.split(' ')[0]}</span>
+                        <item.icon size={20} strokeWidth={isActive ? 2.5 : 1.75} aria-hidden="true"/>
+                        <span>{item.shortLabel}</span>
                       </>
                     )}
                   </NavLink>
@@ -116,12 +170,33 @@ export function CitizenLayout() {
           </nav>
         )}
 
-        {/* "More" dropdown (Settings / Back to home) — triggered from last nav slot */}
+        {/* "More" mobile bottom sheet */}
         {more && !hideNav && (
-          <div className="fixed bottom-[68px] right-3 z-50 border-4 border-[#2A3320] bg-[#FDFBF7] p-2 shadow-[4px_4px_0px_0px_#2A3320] lg:hidden">
-            <Link to="/citizen/notifications" className="block px-4 py-3 text-xs font-bold uppercase">Notifications</Link>
-            <Link to="/citizen/settings" className="block px-4 py-3 text-xs font-bold uppercase">Settings</Link>
-            <Link to="/" className="block px-4 py-3 text-xs font-bold uppercase">Back to home</Link>
+          <div
+            className="fixed inset-0 z-50 flex flex-col justify-end bg-[#2A3320]/55 lg:hidden"
+            onClick={() => setMore(false)}
+          >
+            <div
+              className="rounded-t-2xl border-t-4 border-[#2A3320] bg-[#FDFBF7] p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-2.5"
+              onClick={event => event.stopPropagation()}
+            >
+              <div className="mb-2 flex items-center justify-between border-b-2 border-[#E8E0D0] pb-3">
+                <span className="display-title text-base">Citizen menu</span>
+                <button
+                  type="button"
+                  aria-label="Close menu"
+                  onClick={() => setMore(false)}
+                  className="flex h-11 w-11 items-center justify-center border-2 border-[#2A3320] bg-white"
+                >
+                  <X size={18}/>
+                </button>
+              </div>
+              <Link to="/citizen/notifications" onClick={() => setMore(false)} className="flex min-h-[46px] items-center justify-between border-2 border-[#2A3320] bg-white px-4 text-xs font-black uppercase tracking-wider">Notifications <ChevronRight size={16}/></Link>
+              <Link to="/citizen/settings" onClick={() => setMore(false)} className="flex min-h-[46px] items-center justify-between border-2 border-[#2A3320] bg-white px-4 text-xs font-black uppercase tracking-wider">Settings <ChevronRight size={16}/></Link>
+              <Link to="/transparency" onClick={() => setMore(false)} className="flex min-h-[46px] items-center justify-between border-2 border-[#2A3320] bg-[#D8C9A8] px-4 text-xs font-black uppercase tracking-wider">Public transparency map <ChevronRight size={16}/></Link>
+              <Link to="/officer" onClick={() => setMore(false)} className="flex min-h-[46px] items-center justify-between border-2 border-[#2A3320] bg-[#4F5B2A] px-4 text-xs font-black uppercase tracking-wider text-white">Switch role: Officer <ChevronRight size={16}/></Link>
+              <Link to="/" onClick={() => setMore(false)} className="flex min-h-[44px] items-center justify-center text-xs font-bold uppercase tracking-wider text-[#2A3320]/70 underline">← Back to home</Link>
+            </div>
           </div>
         )}
       </div>
