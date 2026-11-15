@@ -412,6 +412,13 @@ export const mapApi = {
 
 // ── Scorecards / Transparency ─────────────────────────────────────────────────
 
+export interface WeeklyMetricPoint {
+  week: string;
+  filed: number;
+  resolved: number;
+  days: number;
+}
+
 export interface ScorecardGroupMetrics {
   totalIssues: number;
   resolvedIssues: number;
@@ -419,6 +426,7 @@ export interface ScorecardGroupMetrics {
   slaCompliance: number;
   medianResolutionDays: number;
   reopenRate: number;
+  weeklyMetrics?: WeeklyMetricPoint[];
 }
 
 export interface ScorecardWardSummary extends ScorecardGroupMetrics {
@@ -457,6 +465,7 @@ export interface ScorecardData {
   snapshots?: ScorecardSnapshotItem[];
   byWard?: ScorecardWardSummary[];
   byDepartment?: ScorecardDepartmentSummary[];
+  weeklyMetrics?: WeeklyMetricPoint[];
   timestamp: string;
 }
 

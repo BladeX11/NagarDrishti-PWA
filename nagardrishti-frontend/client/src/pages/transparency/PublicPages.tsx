@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AlertTriangle, Building2, Check, Eye, MapPin, ShieldCheck } from 'lucide-react';
-import { issues as seedIssues, statusEvents, weeklyMetrics } from '../../data/seed';
+import { issues as seedIssues, statusEvents } from '../../data/seed';
 import {
   auditApi,
   issuesApi,
@@ -14,6 +14,7 @@ import {
   type ScorecardData,
   type ScorecardGroupMetrics,
   type ScorecardSnapshotItem,
+  type WeeklyMetricPoint,
   TIER_COLORS,
 } from '../../lib/api';
 import { loadSubmittedIssues } from '../../data/localDemo';
@@ -290,6 +291,7 @@ function toScorecardRow(name: string, metrics: ScorecardGroupMetrics) {
     sla: Math.round(metrics.slaCompliance),
     days: metrics.medianResolutionDays.toFixed(1),
     reopen: Math.round(metrics.reopenRate),
+    weeklyMetrics: metrics.weeklyMetrics ?? [],
   };
 }
 
@@ -365,12 +367,13 @@ export function Scorecards() {
         sla: Math.round(weighted(row => row.slaCompliance)),
         days: weighted(row => row.medianResolutionDays).toFixed(1),
         reopen: Math.round(weighted(row => row.reopenRate)),
+        weeklyMetrics: [],
       });
     });
     return result.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   }, [apiScorecard, view]);
 
-  const trends = weeklyMetrics;
+  const trends: WeeklyMetricPoint[] = apiScorecard?.weeklyMetrics ?? [];
   const liveTotal = Number(apiScorecard?.total ?? 0);
   const liveResolved = Number(apiScorecard?.resolved ?? 0);
   const livePastSla = Number(apiScorecard?.pastSLA ?? 0);
@@ -474,7 +477,7 @@ export function Scorecards() {
               </div>
               <div className="mt-4 h-20">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={trends.slice(-6)}>
+                  <LineChart data={(item.weeklyMetrics.length > 0 ? item.weeklyMetrics : trends).slice(-6)}>
                     <Line
                       type="monotone"
                       dataKey="days"
@@ -487,24 +490,36 @@ export function Scorecards() {
                 </ResponsiveContainer>
               </div>
               <p className="text-[11px] font-bold uppercase tracking-wider text-[#2A3320]/55 sm:text-[9px]">
-                Citywide 6-week resolution trend · Live breakdown v1.0
+                {item.weeklyMetrics.length > 0 ? '6-week resolution trend · Live DB series' : 'Citywide 6-week resolution trend · Live breakdown'}
               </p>
             </Panel>
           ))}
         </div>
       )}
       <div className="grid gap-6 xl:grid-cols-2">
-        <Chart title="Issues filed over time" subtitle="12-week view" type="filed" />
-        <Chart title="Resolution time trend" subtitle="Median resolution · days" type="days" />
+        <Chart title="Issues filed over time" subtitle="12-week live view" type="filed" data={trends} loading={loading && !apiScorecard} />
+        <Chart title="Resolution time trend" subtitle="Median resolution · days (12-week live view)" type="days" data={trends} loading={loading && !apiScorecard} />
       </div>
       <div className="mt-6">
-        <Chart title="Filed vs. resolved volume" subtitle="Reports filed and resolved by week" type="area" />
+        <Chart title="Filed vs. resolved volume" subtitle="Reports filed and resolved by week (live DB)" type="area" data={trends} loading={loading && !apiScorecard} />
       </div>
     </div>
   );
 }
 
-function Chart({ title, subtitle, type }: { title: string; subtitle: string; type: 'filed' | 'days' | 'area' }) {
+function Chart({
+  title,
+  subtitle,
+  type,
+  data,
+  loading,
+}: {
+  title: string;
+  subtitle: string;
+  type: 'filed' | 'days' | 'area';
+  data: WeeklyMetricPoint[];
+  loading: boolean;
+}) {
   return (
     <Panel className="chart-panel border-4">
       <div className="mb-4">
@@ -512,35 +527,41 @@ function Chart({ title, subtitle, type }: { title: string; subtitle: string; typ
         <h3 className="display-title mt-1 text-lg">{title}</h3>
         <p className="mt-1 text-[10px] text-[#2A3320]/55">{subtitle}</p>
       </div>
-      <ResponsiveContainer width="100%" height={270}>
-        {type === 'area' ? (
-          <AreaChart data={weeklyMetrics}>
-            <CartesianGrid stroke="#E8E0D0" strokeDasharray="4 4" />
-            <XAxis dataKey="week" tick={{ fontSize: 9, fontWeight: 700 }} />
-            <YAxis tick={{ fontSize: 9, fontWeight: 700 }} />
-            <Tooltip {...tip} />
-            <Area dataKey="filed" name="Filed" stackId="1" stroke="#4F5B2A" fill="#4F5B2A" fillOpacity={0.65} isAnimationActive={false} />
-            <Area dataKey="resolved" name="Resolved" stackId="1" stroke="#B8892D" fill="#B8892D" fillOpacity={0.65} isAnimationActive={false} />
-          </AreaChart>
-        ) : type === 'filed' ? (
-          <LineChart data={weeklyMetrics}>
-            <CartesianGrid stroke="#E8E0D0" strokeDasharray="4 4" />
-            <XAxis dataKey="week" tick={{ fontSize: 9, fontWeight: 700 }} />
-            <YAxis tick={{ fontSize: 9, fontWeight: 700 }} />
-            <Tooltip {...tip} />
-            <Line dataKey="filed" name="Filed" stroke="#4F5B2A" strokeWidth={3} dot={{ r: 3, fill: '#4F5B2A' }} isAnimationActive={false} />
-            <Line dataKey="resolved" name="Resolved" stroke="#B8892D" strokeWidth={3} dot={{ r: 3, fill: '#B8892D' }} isAnimationActive={false} />
-          </LineChart>
-        ) : (
-          <LineChart data={weeklyMetrics}>
-            <CartesianGrid stroke="#E8E0D0" strokeDasharray="4 4" />
-            <XAxis dataKey="week" tick={{ fontSize: 9, fontWeight: 700 }} />
-            <YAxis tick={{ fontSize: 9, fontWeight: 700 }} />
-            <Tooltip {...tip} />
-            <Line dataKey="days" name="Median days" stroke="#4F5B2A" strokeWidth={3} dot={{ r: 3, fill: '#4F5B2A' }} isAnimationActive={false} />
-          </LineChart>
-        )}
-      </ResponsiveContainer>
+      {data.length === 0 ? (
+        <div className="flex h-[270px] items-center justify-center border-2 border-dashed border-[#2A3320]/25 bg-[#D8C9A8]/15 px-4 text-center text-xs font-bold uppercase tracking-wider text-[#2A3320]/60">
+          {loading ? 'Loading live 12-week trend...' : 'Live 12-week trend unavailable.'}
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height={270}>
+          {type === 'area' ? (
+            <AreaChart data={data}>
+              <CartesianGrid stroke="#E8E0D0" strokeDasharray="4 4" />
+              <XAxis dataKey="week" tick={{ fontSize: 9, fontWeight: 700 }} />
+              <YAxis tick={{ fontSize: 9, fontWeight: 700 }} />
+              <Tooltip {...tip} />
+              <Area dataKey="filed" name="Filed" stackId="1" stroke="#4F5B2A" fill="#4F5B2A" fillOpacity={0.65} isAnimationActive={false} />
+              <Area dataKey="resolved" name="Resolved" stackId="1" stroke="#B8892D" fill="#B8892D" fillOpacity={0.65} isAnimationActive={false} />
+            </AreaChart>
+          ) : type === 'filed' ? (
+            <LineChart data={data}>
+              <CartesianGrid stroke="#E8E0D0" strokeDasharray="4 4" />
+              <XAxis dataKey="week" tick={{ fontSize: 9, fontWeight: 700 }} />
+              <YAxis tick={{ fontSize: 9, fontWeight: 700 }} />
+              <Tooltip {...tip} />
+              <Line dataKey="filed" name="Filed" stroke="#4F5B2A" strokeWidth={3} dot={{ r: 3, fill: '#4F5B2A' }} isAnimationActive={false} />
+              <Line dataKey="resolved" name="Resolved" stroke="#B8892D" strokeWidth={3} dot={{ r: 3, fill: '#B8892D' }} isAnimationActive={false} />
+            </LineChart>
+          ) : (
+            <LineChart data={data}>
+              <CartesianGrid stroke="#E8E0D0" strokeDasharray="4 4" />
+              <XAxis dataKey="week" tick={{ fontSize: 9, fontWeight: 700 }} />
+              <YAxis tick={{ fontSize: 9, fontWeight: 700 }} />
+              <Tooltip {...tip} />
+              <Line dataKey="days" name="Median days" stroke="#4F5B2A" strokeWidth={3} dot={{ r: 3, fill: '#4F5B2A' }} isAnimationActive={false} />
+            </LineChart>
+          )}
+        </ResponsiveContainer>
+      )}
     </Panel>
   );
 }

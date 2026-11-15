@@ -73,3 +73,9 @@
 **Context:** `nagardrishti-frontend/vitest.config.ts`, `tsconfig.json` (`"jsx": "preserve"`), and `client/src/pages/officer/OfficerPages.tsx` (automatic JSX runtime without default `React` import).
 **Solution:** Synced `node_modules` with `& ".\node_modules\.bin\pnpm.cmd" install --frozen-lockfile` (note `pnpm` is local in `node_modules/.bin` on this machine rather than global PATH) and added `esbuild: { jsx: 'automatic' }` to `vitest.config.ts` so Vitest matches Vite's React automatic JSX transform.
 **Date:** 2026-11-15
+
+### Production Helmet Default CSP Blocking OpenStreetMap Tiles & Dev Plugin Injecting Inline Script
+**Problem:** Live browser smoke testing on Railway production surfaced CSP console errors: Helmet's default `img-src 'self' data:` blocked `https://*.tile.openstreetmap.org` map tiles on `/citizen/report`, and `vitePluginManusRuntime()` injected a 368 kB inline `<script id="manus-runtime">` + `/__manus__/debug-collector.js` in production `vite build` violating `script-src 'self'`.
+**Context:** `nagardrishti-frontend/server/app.ts` (`helmet(...)`) and `nagardrishti-frontend/vite.config.ts` (`plugins`).
+**Solution:** Configured explicit Helmet `contentSecurityPolicy` directives in `server/app.ts` allowing `https://*.tile.openstreetmap.org`, `blob:`, `data:`, and `https:` image/connect sources while keeping strict `script-src 'self'`, and wrapped `vite.config.ts` plugins in `({ command })` so Manus dev plugins only activate on `command === 'serve'`.
+**Date:** 2026-11-15

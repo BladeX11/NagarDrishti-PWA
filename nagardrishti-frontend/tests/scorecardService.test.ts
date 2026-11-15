@@ -138,5 +138,68 @@ describe('scorecardService.computeScorecard', () => {
       departmentName: 'Roads & Infrastructure',
       slaCompliance: 80,
     });
+    expect(res.weeklyMetrics).toHaveLength(12);
+    expect(res.weeklyMetrics.every((w) => w.filed === 0 && w.resolved === 0 && w.days === 0)).toBe(true);
+  });
+
+  it('computes 12-week live weeklyMetrics citywide and per ward/department excluding issues older than 12 weeks', async () => {
+    vi.useFakeTimers();
+    try {
+      const fixedNow = new Date('2026-11-15T12:00:00Z');
+      vi.setSystemTime(fixedNow);
+      const dayMs = 86_400_000;
+      const nowMs = fixedNow.getTime();
+
+      mockTableRows.set(wards, [{ id: 'ward-11', name: 'Ward 11' }]);
+      mockTableRows.set(departments, [{ id: 'roads', name: 'Roads & Infrastructure' }]);
+      mockTableRows.set(issues, [
+        {
+          id: 'recent-fixed',
+          wardId: 'ward-11',
+          departmentId: 'roads',
+          status: 'Verified Fixed',
+          slaDeadline: new Date(nowMs + dayMs),
+          slaBreach: false,
+          reopenCount: 0,
+          createdAt: new Date(nowMs - 3 * dayMs),
+          updatedAt: new Date(nowMs - 1 * dayMs),
+        },
+        {
+          id: 'week-10-open',
+          wardId: 'ward-11',
+          departmentId: 'roads',
+          status: 'Open',
+          slaDeadline: new Date(nowMs + dayMs),
+          slaBreach: false,
+          reopenCount: 0,
+          createdAt: new Date(nowMs - 16 * dayMs),
+          updatedAt: new Date(nowMs - 15 * dayMs),
+        },
+        {
+          id: 'too-old-for-12w',
+          wardId: 'ward-11',
+          departmentId: 'roads',
+          status: 'Open',
+          slaDeadline: new Date(nowMs - 5 * dayMs),
+          slaBreach: true,
+          reopenCount: 0,
+          createdAt: new Date(nowMs - 100 * dayMs),
+          updatedAt: new Date(nowMs - 99 * dayMs),
+        },
+      ]);
+
+      const res = await scorecardService.computeScorecard();
+      expect(res.total).toBe(3);
+      expect(res.weeklyMetrics).toHaveLength(12);
+
+      // W12 covers [now - 7d, now], W10 covers [now - 21d, now - 14d)
+      expect(res.weeklyMetrics[11]).toEqual({ week: 'W12', filed: 1, resolved: 1, days: 2 });
+      expect(res.weeklyMetrics[9]).toEqual({ week: 'W10', filed: 1, resolved: 0, days: 0 });
+      expect(res.weeklyMetrics.reduce((s, w) => s + w.filed, 0)).toBe(2);
+      expect(res.byWard[0].weeklyMetrics[11]).toEqual({ week: 'W12', filed: 1, resolved: 1, days: 2 });
+      expect(res.byDepartment[0].weeklyMetrics[11]).toEqual({ week: 'W12', filed: 1, resolved: 1, days: 2 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

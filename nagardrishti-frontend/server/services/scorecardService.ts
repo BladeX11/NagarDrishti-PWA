@@ -7,6 +7,14 @@ import { privacyService } from './privacyService.js';
 import { formatDepartmentName, formatWardName } from './issueService.js';
 
 const ACTIVE_STATUSES = ['Open', 'Triaged', 'Assigned', 'In Progress', 'Reopened'];
+const WEEK_MS = 7 * 86_400_000;
+
+export interface WeeklyMetricPoint {
+  week: string;
+  filed: number;
+  resolved: number;
+  days: number;
+}
 
 function normalizeWardFilter(wardId?: string): string | undefined {
   if (!wardId) return undefined;
@@ -48,6 +56,50 @@ function computeGroupMetrics(groupIssues: Array<typeof issues.$inferSelect>, now
     medianResolutionDays,
     reopenRate,
   };
+}
+
+function computeWeeklyMetrics(
+  groupIssues: Array<typeof issues.$inferSelect>,
+  nowMs: number,
+  weeks = 12
+): WeeklyMetricPoint[] {
+  const buckets = Array.from({ length: weeks }, (_, idx) => ({
+    week: `W${idx + 1}`,
+    filed: 0,
+    resolved: 0,
+    resolutionDays: [] as number[],
+  }));
+  const windowStart = nowMs - weeks * WEEK_MS;
+  const bucketIndex = (ms: number): number => {
+    if (!Number.isFinite(ms) || ms < windowStart) return -1;
+    if (ms >= nowMs) return ms <= nowMs + 60_000 ? weeks - 1 : -1;
+    return Math.min(weeks - 1, Math.max(0, Math.floor((ms - windowStart) / WEEK_MS)));
+  };
+
+  for (const issue of groupIssues) {
+    const createdMs = issue.createdAt ? new Date(issue.createdAt).getTime() : NaN;
+    const createdIdx = bucketIndex(createdMs);
+    if (createdIdx >= 0) buckets[createdIdx].filed += 1;
+
+    if (issue.status === 'Verified Fixed') {
+      const resolvedAt = issue.updatedAt ?? issue.createdAt;
+      const resolvedMs = resolvedAt ? new Date(resolvedAt).getTime() : NaN;
+      const resolvedIdx = bucketIndex(resolvedMs);
+      if (resolvedIdx >= 0) {
+        buckets[resolvedIdx].resolved += 1;
+        if (Number.isFinite(createdMs)) {
+          buckets[resolvedIdx].resolutionDays.push(Math.max(0, (resolvedMs - createdMs) / 86_400_000));
+        }
+      }
+    }
+  }
+
+  return buckets.map((b) => ({
+    week: b.week,
+    filed: b.filed,
+    resolved: b.resolved,
+    days: median(b.resolutionDays),
+  }));
 }
 
 function computeAgeDisplay(createdAt: Date | null | undefined): { age: string; ageInDays: number } {
@@ -172,6 +224,7 @@ export const scorecardService = {
         ward: wardLabel,
         wardName: wardNameMap.get(wId) ?? wardLabel,
         ...computeGroupMetrics(group, nowMs),
+        weeklyMetrics: computeWeeklyMetrics(group, nowMs),
       };
     });
 
@@ -182,6 +235,7 @@ export const scorecardService = {
         department: departmentName,
         departmentName,
         ...computeGroupMetrics(group, nowMs),
+        weeklyMetrics: computeWeeklyMetrics(group, nowMs),
       };
     });
 
@@ -198,6 +252,7 @@ export const scorecardService = {
       snapshots,
       byWard,
       byDepartment,
+      weeklyMetrics: computeWeeklyMetrics(filtered, nowMs),
       timestamp: now,
     };
   },
