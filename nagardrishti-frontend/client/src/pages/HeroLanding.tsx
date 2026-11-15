@@ -147,6 +147,7 @@ function MapPreview3D() {
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
+      referrerPolicy: "strict-origin-when-cross-origin",
     }).addTo(map);
     const issues = [
       [18.5314, 73.8446, C.gold, "Open · Footpath obstruction"], [18.5162, 73.8567, C.olive, "In progress · Streetlight repair"],

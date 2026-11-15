@@ -69,7 +69,11 @@ export function MapView({
   return (
     <div className="map-frame relative" style={{ height }}>
       <MapContainer center={[18.5204, 73.8567]} zoom={13} scrollWheelZoom className="h-full w-full">
-        <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
         {onPinChange && <MapClickHandler onPinChange={onPinChange} />}
         {issues.map(issue => {
           const rawPos = getCoords(issue);

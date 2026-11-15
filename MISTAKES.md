@@ -79,3 +79,9 @@
 **Context:** `nagardrishti-frontend/server/app.ts` (`helmet(...)`) and `nagardrishti-frontend/vite.config.ts` (`plugins`).
 **Solution:** Configured explicit Helmet `contentSecurityPolicy` directives in `server/app.ts` allowing `https://*.tile.openstreetmap.org`, `blob:`, `data:`, and `https:` image/connect sources while keeping strict `script-src 'self'`, and wrapped `vite.config.ts` plugins in `({ command })` so Manus dev plugins only activate on `command === 'serve'`.
 **Date:** 2026-11-15
+
+### Helmet Default Referrer-Policy Triggering OpenStreetMap 403 Tile Block
+**Problem:** Even after fixing Helmet's `img-src` CSP, map tiles on Railway production rendered OpenStreetMap's `"Access blocked ... http://osm.wiki/Blocked 403"` graphic instead of map imagery.
+**Context:** `nagardrishti-frontend/server/app.ts` (`helmet(...)`), `client/src/components/shared/MapView.tsx`, and `client/src/pages/HeroLanding.tsx`.
+**Solution:** Helmet defaults `Referrer-Policy` to `no-referrer`, stripping the `Referer` header required by OpenStreetMap's Tile Usage Policy. Set `referrerPolicy: { policy: 'strict-origin-when-cross-origin' }` in `helmet(...)` and `referrerPolicy: "strict-origin-when-cross-origin"` on Leaflet `TileLayer` / `L.tileLayer`.
+**Date:** 2026-11-15

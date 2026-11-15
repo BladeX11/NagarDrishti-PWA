@@ -28,5 +28,6 @@ describe('createApp CSP headers', () => {
     expect(csp).toContain('https://*.tile.openstreetmap.org');
     expect(csp).toContain('blob:');
     expect(csp).toContain("object-src 'none'");
+    expect(res.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
   });
 });
