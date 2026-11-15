@@ -9,7 +9,9 @@ The supplied `Dockerfile`, `docker-compose.prod.yml`, and Caddyfile deploy the A
 3. Copy `.env.example` to `.env.production` and replace every placeholder.
 4. Generate VAPID keys with `pnpm exec web-push generate-vapid-keys`.
 5. Configure Resend or Twilio for OTP delivery.
-6. Configure an S3-compatible bucket with a private write credential and a public CDN/base URL for sanitized issue media.
+6. Configure dual S3-compatible buckets (e.g. Cloudflare R2):
+   - `OBJECT_STORAGE_PRIVATE_BUCKET`: Strictly private (no public domain or r2.dev access). Stores unmodified originals with EXIF metadata for audit ledger and internal fraud detection.
+   - `OBJECT_STORAGE_PUBLIC_BUCKET`: Public read access via custom domain / CDN (`OBJECT_STORAGE_PUBLIC_BASE_URL`). Stores sanitized derivatives (EXIF/GPS metadata stripped).
 
 ## Launch
 
@@ -24,5 +26,6 @@ Run database migrations as a one-off from the application image before first lau
 
 - Use long random `SESSION_SECRET` and `OTP_SECRET` values.
 - Do not expose the object-storage secret or VAPID private key to the browser.
-- Keep the bucket private for original media; expose only a controlled CDN URL or signed URLs.
+- Keep the private bucket strictly private for original citizen media; expose only the public bucket via a controlled CDN domain.
+- Never expose privatePath, original EXIF coordinates, or reporter identities in public endpoints.
 - Use a real provisioned officer account. Production OTP verification allows self-registration only for citizens.
