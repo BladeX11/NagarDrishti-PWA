@@ -250,7 +250,7 @@ export function AnnotationWorkspace() {
                 >
                   {[1, 2, 3, 4].map((item) => (
                     <option key={item} value={item}>
-                      {item} · {item === 4 ? 'urgent' : item === 1 ? 'routine' : 'normal'}
+                      {item} · {item === 4 ? 'urgent' : item === 3 ? 'high' : item === 1 ? 'routine' : 'normal'}
                     </option>
                   ))}
                 </select>

@@ -199,14 +199,14 @@ export function CitizenHome() {
             <Vote className="mt-0.5 shrink-0 text-[#B8892D]" />
             <div className="flex-1">
               <p className="display-title text-lg">
-                {alerts.length} issue{alerts.length === 1 ? "" : "s"} need your
-                vote
+                {alerts.length} issue{alerts.length === 1 ? "" : "s"}{" "}
+                {alerts.length === 1 ? "needs" : "need"} your vote
               </p>
               <p className="mt-1 text-sm text-[#2A3320]/75">
                 "{alerts[0].title}" was claimed resolved. Is it fixed?
               </p>
               <Link
-                to={`/citizen/issue/${alerts[0].id}/verify`}
+                to={`/citizen/issue/${alerts[0].publicRef || alerts[0].id}/verify`}
                 className="mt-4 inline-block w-full sm:w-auto"
               >
                 <Button variant="gold" className="min-h-[44px] w-full sm:w-auto">Verify now →</Button>

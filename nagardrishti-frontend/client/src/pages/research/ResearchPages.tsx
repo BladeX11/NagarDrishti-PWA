@@ -1364,6 +1364,19 @@ export function ProofAudit() {
                   </div>
                 )}
 
+                {item.flags.length > 0 && (
+                  <div className="mt-3 space-y-1.5 border-2 border-[#B8892D] bg-[#FDFBF7] p-3 text-xs">
+                    <p className="text-[9px] font-black uppercase tracking-wider text-[#8B4513]">
+                      Flagged rules ({item.flags.length})
+                    </p>
+                    {item.flags.map((flag) => (
+                      <p key={flag.id} className="font-medium text-[#2A3320]/80">
+                        <b className="uppercase">{flag.rule}</b> ({flag.severity})
+                      </p>
+                    ))}
+                  </div>
+                )}
+
                 <div className="mt-4 flex flex-wrap justify-between gap-2 text-[9px] font-black uppercase tracking-wider">
                   <span>Confidence: {item.confidence.toFixed(2)}</span>
                   <span>Model: {item.modelVersion}</span>
@@ -1373,10 +1386,10 @@ export function ProofAudit() {
                   </span>
                 </div>
                 <Link
-                  to={`/officer/issue/${item.publicRef}/proof`}
+                  to={`/transparency/issue/${item.publicRef}`}
                   className="mt-4 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-[#4F5B2A] underline"
                 >
-                  View full proof <ArrowRight size={11} />
+                  View public issue & proof <ArrowRight size={11} />
                 </Link>
               </Panel>
             );

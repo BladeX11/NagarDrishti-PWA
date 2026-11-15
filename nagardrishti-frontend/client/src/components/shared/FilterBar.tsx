@@ -96,7 +96,7 @@ export function FilterBar({
 
       {mobileSheet && open && (
         <div
-          className="fixed inset-0 z-[70] flex flex-col justify-end bg-[#2A3320]/55 md:hidden"
+          className="fixed inset-0 z-[700] flex flex-col justify-end bg-[#2A3320]/55 md:hidden"
           onClick={() => setOpen(false)}
         >
           <div
