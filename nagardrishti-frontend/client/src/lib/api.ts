@@ -134,14 +134,17 @@ export interface ApiIssue {
   status: string;
   departmentId?: string;
   wardId?: string;
+  ward?: string;
   priority: number;
   urgencyExplanation?: string;
   latitude?: number;
   longitude?: number;
   supporterCount: number;
+  supporters?: number;
   reopenCount: number;
   slaBreach: boolean;
   slaDeadline?: string;
+  slaDeadlineDays?: number;
   proofState: string;
   createdAt: string;
   updatedAt: string;

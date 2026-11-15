@@ -61,3 +61,9 @@
 **Context:** `nagardrishti-frontend/Dockerfile` multi-stage build for Railway deployment.
 **Solution:** Added `COPY patches ./patches` before `RUN pnpm install --frozen-lockfile` in both `build` and `runtime` stages.
 **Date:** 2026-11-14
+
+### Officer Queue Page Blank Screen from Undefined Ward and Priority Values
+**Problem:** The officer queue page (`/officer/queue`) crashed with a blank white screen a few seconds after mounting once the live `/api/issues` response resolved.
+**Context:** `client/src/pages/officer/OfficerPages.tsx` (`TriageQueue`), `server/services/issueService.ts` (`listIssues`, `getIssue`), and `client/src/App.tsx`.
+**Solution:** Handled undefined `ward` by resolving against `wardId` with fallback to `"—"` before calling `.replace()`. Guarded `"●".repeat()` and priority labels against `NaN`/undefined priority values. Populated normalized `ward`, `supporters`, and `slaDeadlineDays` in `issueService.ts`, and wrapped the application root in `<ErrorBoundary>` to avoid unhandled white screens.
+**Date:** 2026-11-15

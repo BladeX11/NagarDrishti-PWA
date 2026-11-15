@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import ErrorBoundary from './components/ErrorBoundary';
 import { CitizenLayout } from './layouts/CitizenLayout';
 import { OfficerLayout } from './layouts/OfficerLayout';
 import { PublicLayout } from './layouts/PublicLayout';
@@ -49,12 +50,12 @@ function ResponsiveHome() {
 }
 
 export default function App() {
-  return <BrowserRouter><Toaster position="bottom-right" toastOptions={{style:{border:'2px solid #2A3320',borderRadius:0,background:'#FDFBF7',color:'#2A3320',fontFamily:'Outfit'}}}/><Suspense fallback={<Loading/>}><Routes>
+  return <ErrorBoundary><BrowserRouter><Toaster position="bottom-right" toastOptions={{style:{border:'2px solid #2A3320',borderRadius:0,background:'#FDFBF7',color:'#2A3320',fontFamily:'Outfit'}}}/><Suspense fallback={<Loading/>}><Routes>
   <Route path="/" element={<ResponsiveHome/>}/>
   <Route path="/citizen" element={<CitizenLayout/>}><Route index element={<CitizenHome/>}/><Route path="explore" element={<ExploreMap/>}/><Route path="report" element={<ReportFlow/>}/><Route path="my-reports" element={<MyReports/>}/><Route path="issue/:id/verify" element={<VerificationVote/>}/><Route path="issue/:id" element={<CitizenIssueDetail/>}/><Route path="notifications" element={<Notifications/>}/><Route path="settings" element={<Settings/>}/></Route>
   <Route path="/officer" element={<OfficerLayout/>}><Route index element={<OfficerOverview/>}/><Route path="queue" element={<TriageQueue/>}/><Route path="issue/:id/proof" element={<ProofReview/>}/><Route path="issue/:id" element={<OfficerIssueDetail/>}/></Route>
   <Route path="/transparency" element={<PublicLayout/>}><Route index element={<PublicMap/>}/><Route path="scorecards" element={<Scorecards/>}/><Route path="sla-breaches" element={<SLABreachWall/>}/><Route path="forgotten" element={<ForgottenIssues/>}/><Route path="issue/:id" element={<PublicIssueDetail/>}/></Route>
   <Route path="/research" element={<ResearchLayout/>}><Route index element={<ResearchOverview/>}/><Route path="annotation" element={<AnnotationWorkspace/>}/><Route path="models" element={<ModelPredictions/>}/><Route path="duplicates" element={<DuplicateAnalysis/>}/><Route path="proof-audit" element={<ProofAudit/>}/><Route path="metrics" element={<LiveEvaluationMetrics/>}/><Route path="audit-ledger" element={<AuditLedger/>}/></Route>
   <Route path="/dashboard" element={<Navigate to="/citizen" replace/>}/><Route path="*" element={<NotFound/>}/>
-</Routes></Suspense></BrowserRouter>;
+</Routes></Suspense></BrowserRouter></ErrorBoundary>;
 }

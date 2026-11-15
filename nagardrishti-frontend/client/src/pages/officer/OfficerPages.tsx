@@ -49,6 +49,10 @@ import {
   CategoryIcon,
 } from "../../components/shared/Primitives";
 import { StatusBadge } from "../../components/shared/StatusBadge";
+import {
+  filterAndSortQueueIssues,
+  formatQueueIssue,
+} from "./triageQueueUtils";
 
 const COLORS = ["#4F5B2A", "#B8892D", "#D8C9A8", "#6B7A3A"];
 const smallTip = {
@@ -311,22 +315,10 @@ export function TriageQueue() {
     };
   }, []);
   const source = apiIssues.length > 0 ? apiIssues : seedIssues;
-  const data = useMemo(() => {
-    const filtered = (source as any[]).filter(
-      issue =>
-        (filters.status === "All" || issue.status === filters.status) &&
-        (filters.category === "All" || issue.category === filters.category) &&
-        issue.title.toLowerCase().includes(query.toLowerCase())
-    );
-    return filtered.sort((a: any, b: any) =>
-      sort === "Oldest"
-        ? b.ageInDays - a.ageInDays
-        : sort === "Most supporters"
-          ? (b.supporters || b.supporterCount || 0) -
-            (a.supporters || a.supporterCount || 0)
-          : a.createdAt.localeCompare(b.createdAt)
-    );
-  }, [filters, sort, query, source]);
+  const data = useMemo(
+    () => filterAndSortQueueIssues(source as any[], filters, query, sort),
+    [filters, sort, query, source]
+  );
   return (
     <div>
       <PageHeader
@@ -421,56 +413,68 @@ export function TriageQueue() {
             </tr>
           </thead>
           <tbody>
-            {data.map(issue => (
-              <tr
-                key={issue.id}
-                onClick={() => navigate(`/officer/issue/${issue.id}`)}
-                className={`cursor-pointer ${issue.slaBreach ? "bg-[#B8892D]/10" : ""}`}
-              >
-                <td className="font-black">{issue.id}</td>
-                <td>
-                  <span className="font-black">{issue.title}</span>
-                  {issue.id === "ND-104" && (
-                    <p className="mt-1 text-[9px] font-black uppercase text-[#B8892D]">
-                      ⚠ Possible duplicate
-                    </p>
-                  )}
-                </td>
-                <td>
-                  <span className="flex items-center gap-2">
-                    <CategoryIcon category={issue.category} size={14} />
-                    {issue.category}
-                  </span>
-                </td>
-                <td>{issue.ward.replace("Ward ", "W-")}</td>
-                <td>{issue.age}</td>
-                <td className="font-black">{issue.supporters}</td>
-                <td>
-                  <span
-                    className={
-                      issue.priority === 1
-                        ? "font-black text-[#8B4513]"
-                        : "font-bold"
-                    }
-                  >
-                    {"●".repeat(Math.max(1, 5 - issue.priority))}{" "}
-                    {["Critical", "High", "Medium", "Low"][issue.priority - 1]}
-                  </span>
-                </td>
-                <td>
-                  <StatusBadge status={issue.status} />
-                </td>
-                <td>
-                  {issue.slaBreach ? (
-                    <span className="font-black text-[#8B4513]">
-                      {issue.ageInDays - issue.slaDeadlineDays}d overdue
+            {data.map(issue => {
+              const {
+                displayId,
+                displayWard,
+                priorityNum,
+                priorityLabel,
+                supporters,
+                ageDisplay,
+                overdueDays,
+              } = formatQueueIssue(issue);
+
+              return (
+                <tr
+                  key={issue.id}
+                  onClick={() => navigate(`/officer/issue/${displayId}`)}
+                  className={`cursor-pointer ${issue.slaBreach ? "bg-[#B8892D]/10" : ""}`}
+                >
+                  <td className="font-black">{displayId}</td>
+                  <td>
+                    <span className="font-black">{issue.title}</span>
+                    {(displayId === "ND-104" || issue.id === "ND-104") && (
+                      <p className="mt-1 text-[9px] font-black uppercase text-[#B8892D]">
+                        ⚠ Possible duplicate
+                      </p>
+                    )}
+                  </td>
+                  <td>
+                    <span className="flex items-center gap-2">
+                      <CategoryIcon category={issue.category} size={14} />
+                      {issue.category}
                     </span>
-                  ) : (
-                    "On track"
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td>{displayWard}</td>
+                  <td>{ageDisplay}</td>
+                  <td className="font-black">{supporters}</td>
+                  <td>
+                    <span
+                      className={
+                        priorityNum === 1
+                          ? "font-black text-[#8B4513]"
+                          : "font-bold"
+                      }
+                    >
+                      {"●".repeat(Math.max(1, 5 - priorityNum))}{" "}
+                      {priorityLabel}
+                    </span>
+                  </td>
+                  <td>
+                    <StatusBadge status={issue.status} />
+                  </td>
+                  <td>
+                    {issue.slaBreach ? (
+                      <span className="font-black text-[#8B4513]">
+                        {overdueDays}d overdue
+                      </span>
+                    ) : (
+                      "On track"
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -480,7 +484,7 @@ export function TriageQueue() {
             key={issue.id}
             issue={issue}
             variant="compact"
-            onClick={() => navigate(`/officer/issue/${issue.id}`)}
+            onClick={() => navigate(`/officer/issue/${issue.publicRef || issue.id}`)}
           />
         ))}
       </div>
@@ -583,7 +587,7 @@ export function OfficerIssueDetail() {
           <div className="border-b-4 border-[#2A3320] pb-5">
             <div className="mb-3 flex flex-wrap items-center gap-3">
               <p className="eyebrow">
-                {base.id} · {base.ward}
+                {base.publicRef || base.id} · {base.ward || (base.wardId ? `Ward ${base.wardId.replace(/^ward-/i, "")}` : "Ward 11")}
               </p>
               <StatusBadge status={status} />
             </div>
@@ -592,11 +596,11 @@ export function OfficerIssueDetail() {
               <CategoryIcon category={base.category} size={15} />
               {base.category}
               <span>·</span>
-              {base.department}
+              {base.department || "Civic Works"}
               <span>·</span>
-              {base.age}
+              {base.age || (base.ageInDays !== undefined ? `${base.ageInDays}d ago` : "Recent")}
               <span>·</span>
-              {base.supporters} supporters
+              {base.supporterCount ?? base.supporters ?? 0} supporters
             </p>
           </div>
           <section>
@@ -632,8 +636,8 @@ export function OfficerIssueDetail() {
                 <div>
                   <p className="eyebrow">Urgency</p>
                   <p className="mt-1 text-sm font-black">
-                    Tier {base.priority} ·{" "}
-                    {["Critical", "High", "Medium", "Low"][base.priority - 1]} ✓
+                    Tier {typeof base.priority === "number" && base.priority >= 1 && base.priority <= 4 ? base.priority : 3} ·{" "}
+                    {["Critical", "High", "Medium", "Low"][(typeof base.priority === "number" && base.priority >= 1 && base.priority <= 4 ? base.priority : 3) - 1]} ✓
                   </p>
                 </div>
               </div>

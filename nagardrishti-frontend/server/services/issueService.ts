@@ -256,8 +256,12 @@ export const issueService = {
       // Fallback
     }
 
+    const wardNumber = issue.wardId ? issue.wardId.replace(/^ward-/i, "") : "";
     return {
       ...issue,
+      ward: wardNumber ? `Ward ${wardNumber}` : "Ward 11",
+      supporters: issue.supporterCount ?? 0,
+      slaDeadlineDays: 7,
       // Public location (coarsened)
       latitude: issue.publicLat,
       longitude: issue.publicLng,
@@ -323,8 +327,12 @@ export const issueService = {
     const items = results.map(issue => {
       const { age, ageInDays } = computeAge(issue.createdAt!);
       const updatedAge = computeAge(issue.updatedAt || issue.createdAt!).age;
+      const wardNumber = issue.wardId ? issue.wardId.replace(/^ward-/i, "") : "";
       return {
         ...issue,
+        ward: wardNumber ? `Ward ${wardNumber}` : "Ward 11",
+        supporters: issue.supporterCount ?? 0,
+        slaDeadlineDays: 7,
         latitude: issue.publicLat,
         longitude: issue.publicLng,
         age,
