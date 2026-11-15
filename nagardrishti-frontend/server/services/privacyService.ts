@@ -1,7 +1,3 @@
-import { eq } from 'drizzle-orm';
-import { db } from '../db/index.js';
-import { issues } from '../db/schema.js';
-
 const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
 
 function encodeGeohash(lat: number, lng: number, precision: number = 6): string {
@@ -94,10 +90,31 @@ export const privacyService = {
   },
 
   /**
-   * Strip private fields from an issue for public API responses.
+   * Strip private fields from an issue and its media for public API responses.
+   * Redacts privateLat, privateLng, reporterId, and all private media attributes.
    */
-  redactForPublic(issue: Record<string, unknown>) {
+  redactForPublic(issue: Record<string, any>) {
     const { privateLat, privateLng, reporterId, ...publicFields } = issue;
+    if (Array.isArray(publicFields.media)) {
+      publicFields.media = publicFields.media.map((m: any) => this.redactMediaForPublic(m));
+    }
     return publicFields;
+  },
+
+  /**
+   * Retain only public-safe media fields (strip privatePath, exifLat, exifLng, fileHash, perceptualHash).
+   */
+  redactMediaForPublic(media: Record<string, any>) {
+    if (!media || typeof media !== 'object') return media;
+    return {
+      id: media.id,
+      issueId: media.issueId,
+      type: media.type,
+      publicPath: media.publicPath ?? null,
+      mimeType: media.mimeType ?? 'image/jpeg',
+      fileSize: media.fileSize ?? null,
+      privacyReviewed: media.privacyReviewed ?? false,
+      createdAt: media.createdAt,
+    };
   },
 };

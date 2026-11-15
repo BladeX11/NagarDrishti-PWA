@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { aiQueue } from "../ai/queue.js";
 import multer from "multer";
 import { notificationService } from "../services/notificationService.js";
+import { storeIssueImage } from "../services/objectStorage.js";
 
 const router = Router();
 const upload = multer({
@@ -344,29 +345,76 @@ router.post(
   "/:id/media",
   requireAuth,
   requireRole("citizen", "officer"),
+  uploadPhoto,
   async (req, res) => {
     try {
-      const { dataUrl, type } = req.body;
-      if (!dataUrl)
+      let inputBuffer: Buffer | null = null;
+      let mimeType = "image/jpeg";
+
+      if (req.file && req.file.buffer) {
+        inputBuffer = req.file.buffer;
+        mimeType = req.file.mimetype || "image/jpeg";
+      } else if (req.body.dataUrl) {
+        const matches = req.body.dataUrl.match(
+          /^data:([A-Za-z0-9\-+\/.]+);base64,(.+)$/
+        );
+        if (matches) {
+          mimeType = matches[1];
+          inputBuffer = Buffer.from(matches[2], "base64");
+        }
+      }
+
+      if (!inputBuffer) {
         return res
           .status(400)
-          .json({ success: false, error: "dataUrl required" });
+          .json({ success: false, error: "Valid image data or file is required" });
+      }
+
+      const ext =
+        mimeType === "image/png"
+          ? "png"
+          : mimeType === "image/webp"
+            ? "webp"
+            : "jpg";
+
+      const stored = await storeIssueImage({
+        buffer: inputBuffer,
+        mimeType,
+        extension: ext,
+      });
+
+      const { createHash } = await import("crypto");
+      const hash = createHash("sha256").update(inputBuffer).digest("hex");
+      const perceptualHash = hash.substring(0, 16);
 
       const { db } = await import("../db/index.js");
       const { issueMedia } = await import("../db/schema.js");
-      const { createHash } = await import("crypto");
 
-      const hash = createHash("sha256").update(dataUrl).digest("hex");
+      const [mediaRecord] = await db
+        .insert(issueMedia)
+        .values({
+          issueId: req.params.id,
+          type: req.body.type || "proof",
+          privatePath: stored.privatePath,
+          publicPath: stored.publicPath,
+          fileHash: hash,
+          perceptualHash,
+          exifLat: stored.exifLat ?? null,
+          exifLng: stored.exifLng ?? null,
+          fileSize: inputBuffer.length,
+          mimeType,
+          privacyReviewed: true,
+        })
+        .returning();
 
-      await db.insert(issueMedia).values({
-        issueId: req.params.id,
-        type: type || "before",
-        privatePath: dataUrl,
-        fileHash: hash,
-        perceptualHash: hash.substring(0, 16), // Use part of hash as perceptual hash for simple identical image matching
+      res.json({
+        success: true,
+        data: {
+          id: mediaRecord?.id,
+          status: "saved",
+          publicPath: stored.publicPath,
+        },
       });
-
-      res.json({ success: true, data: { status: "saved" } });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error.message });
     }

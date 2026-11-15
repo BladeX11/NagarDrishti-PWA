@@ -45,6 +45,12 @@ export const issueService = {
       latitude: number;
       longitude: number;
       photoDataUrl?: string;
+      photo?: {
+        buffer: Buffer;
+        originalName?: string;
+        mimeType: string;
+        size: number;
+      };
     },
     reporterId: string
   ) {
@@ -54,49 +60,59 @@ export const issueService = {
     let publicMediaPath: string | null = null;
     let mimeType: string | null = null;
     let fileSize: number | null = null;
+    let exifLat: number | null = null;
+    let exifLng: number | null = null;
 
-    if (data.photoDataUrl) {
-      const { createHash } = await import("crypto");
+    let inputBuffer: Buffer | null = null;
+    let detectedMime = "image/jpeg";
 
+    if (data.photo && data.photo.buffer) {
+      inputBuffer = data.photo.buffer;
+      detectedMime = data.photo.mimeType || "image/jpeg";
+    } else if (data.photoDataUrl) {
       const matches = data.photoDataUrl.match(
-        /^data:([A-Za-z-+\/]+);base64,(.+)$/
+        /^data:([A-Za-z0-9\-+\/.]+);base64,(.+)$/
       );
       if (matches) {
-        mimeType = matches[1];
-        const buffer = Buffer.from(matches[2], "base64");
-        fileSize = buffer.length;
-        fileHash = createHash("sha256").update(buffer).digest("hex");
-        perceptualHash = fileHash.substring(0, 16);
-
-        const existingMedia = await db
-          .select()
-          .from(issueMedia)
-          .where(eq(issueMedia.fileHash, fileHash));
-        if (existingMedia.length > 0) {
-          throw new Error(
-            "An identical image has already been submitted for another issue."
-          );
-        }
-
-        const ext =
-          mimeType === "image/png"
-            ? "png"
-            : mimeType === "image/webp"
-              ? "webp"
-              : "jpg";
-        const stored = await storeIssueImage({
-          buffer,
-          mimeType,
-          extension: ext,
-        });
-        storedMediaPath = stored.privatePath;
-        publicMediaPath = stored.publicPath;
-      } else {
-        fileHash = createHash("sha256").update(data.photoDataUrl).digest("hex");
-        perceptualHash = fileHash.substring(0, 16);
-        storedMediaPath = data.photoDataUrl;
-        publicMediaPath = data.photoDataUrl;
+        detectedMime = matches[1];
+        inputBuffer = Buffer.from(matches[2], "base64");
       }
+    }
+
+    if (inputBuffer) {
+      const { createHash } = await import("crypto");
+      mimeType = detectedMime;
+      fileSize = inputBuffer.length;
+      fileHash = createHash("sha256").update(inputBuffer).digest("hex");
+      perceptualHash = fileHash.substring(0, 16);
+
+      const existingMedia = await db
+        .select()
+        .from(issueMedia)
+        .where(eq(issueMedia.fileHash, fileHash));
+      if (existingMedia.length > 0) {
+        throw new Error(
+          "An identical image has already been submitted for another issue."
+        );
+      }
+
+      const ext =
+        mimeType === "image/png"
+          ? "png"
+          : mimeType === "image/webp"
+            ? "webp"
+            : "jpg";
+
+      const stored = await storeIssueImage({
+        buffer: inputBuffer,
+        mimeType,
+        extension: ext,
+      });
+
+      storedMediaPath = stored.privatePath;
+      publicMediaPath = stored.publicPath;
+      exifLat = stored.exifLat ?? null;
+      exifLng = stored.exifLng ?? null;
     }
 
     // 1. Coarsen location for privacy
@@ -148,8 +164,11 @@ export const issueService = {
         publicPath: publicMediaPath,
         fileHash,
         perceptualHash,
+        exifLat: exifLat ?? null,
+        exifLng: exifLng ?? null,
         fileSize: fileSize ?? undefined,
         mimeType: mimeType ?? undefined,
+        privacyReviewed: true,
       });
     }
 
@@ -165,7 +184,7 @@ export const issueService = {
 
     void aiQueue.enqueueIssueInference(issue.id);
 
-    return issue;
+    return privacyService.redactForPublic(issue);
   },
 
   /**
@@ -256,7 +275,7 @@ export const issueService = {
       // Fallback
     }
 
-    return {
+    const issuePayload = {
       ...issue,
       // Public location (coarsened)
       latitude: issue.publicLat,
@@ -273,6 +292,8 @@ export const issueService = {
       },
       events: formattedEvents,
     };
+
+    return privacyService.redactForPublic(issuePayload);
   },
 
   /**
@@ -323,7 +344,7 @@ export const issueService = {
     const items = results.map(issue => {
       const { age, ageInDays } = computeAge(issue.createdAt!);
       const updatedAge = computeAge(issue.updatedAt || issue.createdAt!).age;
-      return {
+      const raw = {
         ...issue,
         latitude: issue.publicLat,
         longitude: issue.publicLng,
@@ -331,6 +352,7 @@ export const issueService = {
         updatedAge,
         ageInDays,
       };
+      return privacyService.redactForPublic(raw);
     });
 
     return {
@@ -403,7 +425,7 @@ export const issueService = {
       .where(eq(issues.id, issueId))
       .returning();
 
-    return updated;
+    return privacyService.redactForPublic(updated);
   },
 
   /**
