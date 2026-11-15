@@ -81,6 +81,26 @@ function deriveWard(lat: number, lng: number): string {
   return 'ward-14';
 }
 
+export function isSafePublicMediaUrl(url: unknown): url is string {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith('s3://')) return false;
+  return (
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('data:image/')
+  );
+}
+
+export function sanitizePublicMediaItem(item: Record<string, unknown>) {
+  const { privatePath: _privatePath, exifLat: _exifLat, exifLng: _exifLng, ...rest } = item;
+  return {
+    ...rest,
+    publicPath: isSafePublicMediaUrl(item.publicPath) ? item.publicPath : null,
+  };
+}
+
 export const privacyService = {
   /**
    * Coarsen a GPS location to a geohash cell center.
@@ -93,11 +113,30 @@ export const privacyService = {
     return { geohash, publicLat, publicLng, wardId };
   },
 
+  sanitizePublicMedia(mediaItems: Array<Record<string, unknown>>) {
+    return mediaItems.map(sanitizePublicMediaItem);
+  },
+
   /**
    * Strip private fields from an issue for public API responses.
    */
-  redactForPublic(issue: Record<string, unknown>) {
-    const { privateLat, privateLng, reporterId, ...publicFields } = issue;
+  redactForPublic<T extends Record<string, unknown>>(issue: T) {
+    const {
+      privateLat: _privateLat,
+      privateLng: _privateLng,
+      reporterId: _reporterId,
+      ...publicFields
+    } = issue;
+
+    if (Array.isArray(publicFields.media)) {
+      return {
+        ...publicFields,
+        media: publicFields.media.map((m) =>
+          m && typeof m === 'object' ? sanitizePublicMediaItem(m as Record<string, unknown>) : m
+        ),
+      };
+    }
+
     return publicFields;
   },
 };

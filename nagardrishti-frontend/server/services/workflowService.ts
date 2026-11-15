@@ -1,8 +1,9 @@
 import { db } from '../db/index.js';
-import { issues } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
+import { adversarialFlags, issues, statusEvents } from '../db/schema.js';
+import { desc, eq } from 'drizzle-orm';
 import { auditService } from './auditService.js';
-import { adversarialService } from './adversarialService.js';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ═══════════════════════════════════════════════════════
 // VALID STATUS TRANSITIONS (backend-enforced)
@@ -38,85 +39,124 @@ export const workflowService = {
    * - Updates issue status
    */
   async transitionStatus(
-    issueId: string,
+    issueIdOrRef: string,
     toStatus: string,
     actorId: string,
     actorRole: string,
     reason?: string
   ) {
-    const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
-    if (!issue) {
-      throw new Error('Issue not found');
-    }
+    return db.transaction(async (tx) => {
+      const trimmed = issueIdOrRef.trim();
+      const [issue] = await tx
+        .select()
+        .from(issues)
+        .where(UUID_RE.test(trimmed) ? eq(issues.id, trimmed) : eq(issues.publicRef, trimmed))
+        .for('update');
 
-    const fromStatus = issue.status;
+      if (!issue) {
+        throw new Error('Issue not found');
+      }
 
-    // 1. Validate transition is allowed
-    const allowed = VALID_TRANSITIONS[fromStatus];
-    if (!allowed || !allowed.includes(toStatus)) {
-      throw new Error(
-        `Invalid status transition: "${fromStatus}" → "${toStatus}". ` +
-        `Allowed: [${allowed?.join(', ') || 'none'}]`
-      );
-    }
+      const fromStatus = issue.status;
 
-    // 2. Validate role is authorized
-    const allowedRoles = TRANSITION_ROLES[toStatus];
-    if (!allowedRoles || !allowedRoles.includes(actorRole)) {
-      throw new Error(
-        `Role "${actorRole}" is not authorized to transition to "${toStatus}". ` +
-        `Allowed roles: [${allowedRoles?.join(', ') || 'none'}]`
-      );
-    }
-
-    // 3. Special rule: proof required for "Claimed Resolved"
-    if (toStatus === 'Claimed Resolved' && issue.proofState === 'none') {
-      throw new Error(
-        'Cannot transition to "Claimed Resolved" without submitting proof. ' +
-        'Upload proof-of-fix evidence first.'
-      );
-    }
-
-    // 4. Adversarial check for Verified Fixed
-    if (toStatus === 'Verified Fixed') {
-      const activeFlags = await adversarialService.getActiveFlags(issueId);
-      const highFlags = activeFlags.filter(f => f.severity === 'high' && !f.resolvedAt);
-      if (highFlags.length > 0) {
+      // 1. Validate transition is allowed
+      const allowed = VALID_TRANSITIONS[fromStatus];
+      if (!allowed || !allowed.includes(toStatus)) {
         throw new Error(
-          `Cannot advance to "Verified Fixed": ${highFlags.length} high-severity adversarial flag(s) are active. ` +
-          `Admin must review flags first.`
+          `Invalid status transition: "${fromStatus}" -> "${toStatus}". ` +
+          `Allowed: [${allowed?.join(', ') || 'none'}]`
         );
       }
-    }
 
-    // 5. Append to audit ledger (hash-chained)
-    await auditService.appendStatusEvent({
-      issueId,
-      fromStatus,
-      toStatus,
-      actorId,
-      actorRole,
-      reason,
+      // 2. Validate role is authorized
+      const allowedRoles = TRANSITION_ROLES[toStatus];
+      if (!allowedRoles || !allowedRoles.includes(actorRole)) {
+        throw new Error(
+          `Role "${actorRole}" is not authorized to transition to "${toStatus}". ` +
+          `Allowed roles: [${allowedRoles?.join(', ') || 'none'}]`
+        );
+      }
+
+      // 3. Special rule: valid submitted or accepted proof required for "Claimed Resolved"
+      if (
+        toStatus === 'Claimed Resolved' &&
+        issue.proofState !== 'submitted' &&
+        issue.proofState !== 'accepted'
+      ) {
+        throw new Error(
+          'Cannot transition to "Claimed Resolved" without valid submitted or accepted proof. ' +
+          'Upload proof-of-fix evidence first.'
+        );
+      }
+
+      // 4. Adversarial check for Verified Fixed (read within transaction)
+      if (toStatus === 'Verified Fixed') {
+        const activeFlags = await tx
+          .select()
+          .from(adversarialFlags)
+          .where(eq(adversarialFlags.issueId, issue.id));
+        const highFlags = activeFlags.filter((f) => f.severity === 'high' && !f.resolvedAt);
+        if (highFlags.length > 0) {
+          throw new Error(
+            `Cannot advance to "Verified Fixed": ${highFlags.length} high-severity adversarial flag(s) are active. ` +
+            `Admin must review flags first.`
+          );
+        }
+      }
+
+      // 5. Append to audit ledger inside the same transaction so prevHash cannot fork concurrently
+      const lastEvents = await tx
+        .select()
+        .from(statusEvents)
+        .where(eq(statusEvents.issueId, issue.id))
+        .orderBy(desc(statusEvents.sequenceNum))
+        .limit(1);
+
+      const prevHash = lastEvents.length > 0 ? lastEvents[0].eventHash : 'GENESIS';
+      const timestamp = new Date();
+      const eventHash = auditService.computeEventHash(
+        prevHash,
+        issue.id,
+        toStatus,
+        actorId,
+        timestamp
+      );
+
+      await tx.insert(statusEvents).values({
+        issueId: issue.id,
+        fromStatus,
+        toStatus,
+        actorId,
+        actorRole,
+        reason,
+        prevHash,
+        eventHash,
+        createdAt: timestamp,
+      });
+
+      // 6. Update issue status
+      const updateData: {
+        status: string;
+        updatedAt: Date;
+        reopenCount?: number;
+      } = {
+        status: toStatus,
+        updatedAt: new Date(),
+      };
+
+      // Track reopen count
+      if (toStatus === 'Reopened') {
+        updateData.reopenCount = (issue.reopenCount ?? 0) + 1;
+      }
+
+      const [updated] = await tx
+        .update(issues)
+        .set(updateData)
+        .where(eq(issues.id, issue.id))
+        .returning();
+
+      return updated;
     });
-
-    // 6. Update issue status
-    const updateData: Record<string, unknown> = {
-      status: toStatus,
-      updatedAt: new Date(),
-    };
-
-    // Track reopen count
-    if (toStatus === 'Reopened') {
-      updateData.reopenCount = (issue.reopenCount ?? 0) + 1;
-    }
-
-    const [updated] = await db
-      .update(issues)
-      .set(updateData)
-      .where(eq(issues.id, issueId))
-      .returning();
-
-    return updated;
   },
 
   /**

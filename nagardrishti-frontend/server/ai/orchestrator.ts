@@ -1,13 +1,14 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { issueDuplicates, issues, modelPredictions } from '../db/schema.js';
-import { AI_DATA_VERSION, AI_VERSION, CALIBRATION_VERSION, type IssueInferenceContext, type IssueInferenceResult } from './contracts.js';
+import { AI_DATA_VERSION, AI_VERSION, CALIBRATION_VERSION, type IssueInferenceContext, type IssueInferenceResult, type Prediction, type PredictionExplanation } from './contracts.js';
 import type { Category } from '../../shared/types.js';
 import { predictCategory, predictDepartment, predictPriority, predictProof, scoreDuplicate } from './rules.js';
-import { haversineMetres } from './features.js';
+import { clamp, haversineMetres } from './features.js';
 import { issueGraphService } from './graph.js';
 import { calibratePrediction } from './calibration.js';
-import { suggestCategory } from './categorySuggestion.js';
+import { suggestCategory, type CategorySuggestion } from './categorySuggestion.js';
+import { predictTrainedCategory } from '../evaluation/trainedModel.js';
 
 function toContext(issue: typeof issues.$inferSelect): IssueInferenceContext {
   return {
@@ -25,6 +26,109 @@ function toContext(issue: typeof issues.$inferSelect): IssueInferenceContext {
   };
 }
 
+function buildCategoryPrediction(
+  context: IssueInferenceContext,
+  categorySuggestion: CategorySuggestion,
+): Prediction<Category> {
+  const rulesPrediction = predictCategory(context);
+  if (categorySuggestion.source === 'rules') {
+    return {
+      ...rulesPrediction,
+      explanation: categorySuggestion.reason,
+      modelVersion: categorySuggestion.modelVersion,
+    };
+  }
+
+  const reportText = `${context.title}\n${context.description}`.trim();
+  const trained = reportText ? predictTrainedCategory(reportText) : null;
+  const rulesStrongMatch =
+    rulesPrediction.prediction === categorySuggestion.category &&
+    (rulesPrediction.signals[0]?.contribution ?? 0) > 0;
+
+  if (categorySuggestion.source === 'local-ml' && trained) {
+    const confidence = clamp(trained.confidence, 0.35, 0.96);
+    const signals: PredictionExplanation[] =
+      trained.evidenceTerms.length > 0
+        ? trained.evidenceTerms.map((term) => ({
+            signal: 'nb_evidence_term',
+            value: term,
+            contribution: clamp(confidence, 0.5, 1),
+          }))
+        : [{ signal: 'nb_prior_fallback', value: trained.label, contribution: 0.2 }];
+
+    if (rulesStrongMatch) {
+      signals.push({
+        signal: 'keyword_agreement',
+        value: rulesPrediction.prediction,
+        contribution: rulesPrediction.signals[0].contribution,
+      });
+    }
+
+    return {
+      ...rulesPrediction,
+      prediction: categorySuggestion.category,
+      confidence,
+      explanation: categorySuggestion.reason,
+      signals,
+      modelVersion: categorySuggestion.modelVersion,
+      dataVersion: 'civictrust-benchmark-v1',
+    };
+  }
+
+  // Gemini semantic classification: combine base confidence with local-ML, keyword, and reporter agreement signals
+  const signals: PredictionExplanation[] = [
+    {
+      signal: 'gemini_semantic_classification',
+      value: categorySuggestion.category,
+      contribution: reportText.length >= 12 ? 0.85 : 0.55,
+    },
+  ];
+  let confidence = reportText.length >= 12 ? 0.82 : 0.68;
+
+  if (trained && trained.label === categorySuggestion.category) {
+    confidence += 0.06;
+    signals.push({
+      signal: 'local_ml_agreement',
+      value: trained.evidenceTerms.join(', ') || trained.label,
+      contribution: clamp(trained.confidence, 0.5, 1),
+    });
+  }
+  if (rulesStrongMatch) {
+    confidence += 0.05;
+    signals.push({
+      signal: 'keyword_agreement',
+      value: rulesPrediction.prediction,
+      contribution: rulesPrediction.signals[0].contribution,
+    });
+  }
+  if (context.category === categorySuggestion.category) {
+    signals.push({
+      signal: 'reporter_category_match',
+      value: context.category,
+      contribution: 0.65,
+    });
+  }
+  if (
+    trained &&
+    trained.evidenceTerms.length > 0 &&
+    trained.label !== categorySuggestion.category &&
+    !rulesStrongMatch &&
+    (rulesPrediction.signals[0]?.contribution ?? 0) > 0
+  ) {
+    confidence -= 0.1;
+  }
+
+  return {
+    ...rulesPrediction,
+    prediction: categorySuggestion.category,
+    confidence: clamp(confidence, 0.45, 0.96),
+    explanation: categorySuggestion.reason,
+    signals,
+    modelVersion: categorySuggestion.modelVersion,
+    dataVersion: 'live-report-text-v1',
+  };
+}
+
 export const aiOrchestrator = {
   async inferForIssue(issueId: string): Promise<IssueInferenceResult> {
     const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
@@ -36,21 +140,7 @@ export const aiOrchestrator = {
       issue.language === 'hi' ? 'Hindi' : issue.language === 'mr' ? 'Marathi' : 'English',
       context.category as Category,
     );
-    const categoryPrediction = categorySuggestion.source !== 'rules'
-      ? {
-          ...predictCategory(context),
-          prediction: categorySuggestion.category,
-          confidence: 0.5,
-          explanation: categorySuggestion.reason,
-          signals: [],
-          modelVersion: categorySuggestion.modelVersion,
-          dataVersion: categorySuggestion.source === 'gemini' ? 'live-report-text-v1' : 'civictrust-benchmark-v1',
-        }
-      : {
-          ...predictCategory(context),
-          explanation: categorySuggestion.reason,
-          modelVersion: categorySuggestion.modelVersion,
-        };
+    const categoryPrediction = buildCategoryPrediction(context, categorySuggestion);
     const predictions = [
       categoryPrediction,
       predictDepartment(context.category as Category),

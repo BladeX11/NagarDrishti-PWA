@@ -10,8 +10,9 @@ export const statusStyles: Record<IssueStatus, string> = {
   Reopened: 'bg-[#8B4513]/20 text-[#8B4513]',
 };
 
-export function StatusBadge({ status, className = '' }: { status: IssueStatus; className?: string }) {
-  return <span className={`inline-flex items-center rounded-full border-2 border-[#2A3320] px-3 py-1 text-[10px] font-black uppercase tracking-wider ${statusStyles[status]} ${className}`}>{status}</span>;
+export function StatusBadge({ status, className = '' }: { status: IssueStatus | string; className?: string }) {
+  const style = statusStyles[status as IssueStatus] ?? 'bg-[#E8E0D0] text-[#2A3320]';
+  return <span className={`inline-flex items-center rounded-full border-2 border-[#2A3320] px-3 py-1 text-[10px] font-black uppercase tracking-wider ${style} ${className}`}>{status || 'Unknown'}</span>;
 }
 
 export const statusDot: Record<IssueStatus, string> = {

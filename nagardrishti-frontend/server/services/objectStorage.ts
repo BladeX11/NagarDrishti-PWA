@@ -4,7 +4,8 @@ import path from 'path';
 import { nanoid } from 'nanoid';
 
 const bucket = process.env.OBJECT_STORAGE_BUCKET;
-const publicBaseUrl = process.env.OBJECT_STORAGE_PUBLIC_BASE_URL?.replace(/\/$/, '');
+const rawPublicBaseUrl = process.env.OBJECT_STORAGE_PUBLIC_BASE_URL?.trim().replace(/\/$/, '');
+const publicBaseUrl = rawPublicBaseUrl && /^https?:\/\//i.test(rawPublicBaseUrl) ? rawPublicBaseUrl : undefined;
 const s3 = bucket ? new S3Client({
   region: process.env.OBJECT_STORAGE_REGION || 'auto',
   endpoint: process.env.OBJECT_STORAGE_ENDPOINT || undefined,
@@ -14,12 +15,16 @@ const s3 = bucket ? new S3Client({
     : undefined,
 }) : null;
 
-export async function storeIssueImage(input: { buffer: Buffer; mimeType: string; extension: string }) {
+export async function storeIssueImage(input: {
+  buffer: Buffer;
+  mimeType: string;
+  extension: string;
+}): Promise<{ privatePath: string; publicPath: string | null }> {
   const key = `issues/${new Date().toISOString().slice(0, 10)}/${nanoid(16)}.${input.extension}`;
   if (s3 && bucket) {
     await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: input.buffer, ContentType: input.mimeType, CacheControl: 'private, max-age=31536000, immutable' }));
-    const publicPath = publicBaseUrl ? `${publicBaseUrl}/${key}` : undefined;
-    return { privatePath: `s3://${bucket}/${key}`, publicPath: publicPath ?? `s3://${bucket}/${key}` };
+    const publicPath = publicBaseUrl ? `${publicBaseUrl}/${key}` : null;
+    return { privatePath: `s3://${bucket}/${key}`, publicPath };
   }
 
   if (process.env.NODE_ENV === 'production' && process.env.OBJECT_STORAGE_REQUIRED === 'true') throw new Error('Object storage is required in production but is not configured');

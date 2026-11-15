@@ -64,6 +64,11 @@ export function createApp(): Express {
     }
   });
 
+  // 404 handler for API routes (must be registered before production SPA fallback)
+  app.use(['/api', '/api/*'], (_req: Request, res: Response) => {
+    res.status(404).json({ success: false, error: 'API endpoint not found' });
+  });
+
   // Serve static files in production
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.join(__dirname, '../dist/public')));
@@ -71,11 +76,6 @@ export function createApp(): Express {
       res.sendFile(path.join(__dirname, '../dist/public/index.html'));
     });
   }
-
-  // 404 handler for API routes
-  app.use('/api/*', (req: Request, res: Response) => {
-    res.status(404).json({ success: false, error: 'API endpoint not found' });
-  });
 
   // Fallback for root in dev mode so users don't see "Cannot GET /"
   if (process.env.NODE_ENV !== 'production') {

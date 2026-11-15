@@ -5,7 +5,42 @@
  * header retained for local prototype role switching.
  */
 
-const BASE = "/api";
+const BASE =
+  (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/+$/, "") || "/api";
+
+export const AUTH_READY_EVENT = "nd-auth-ready";
+export const AUTH_CHANGED_EVENT = "nd-auth-changed";
+
+export interface AuthUser {
+  id: string;
+  role: string;
+  name: string;
+}
+
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+export function notifyAuthReady(user: AuthUser) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent<AuthUser>(AUTH_READY_EVENT, { detail: user }));
+  }
+}
+
+function notifyAuthChanged(user: AuthUser | null) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<{ user: AuthUser | null }>(AUTH_CHANGED_EVENT, {
+        detail: { user },
+      })
+    );
+  }
+}
 
 function getRole(): string | null {
   return localStorage.getItem("nd-role");
@@ -22,7 +57,9 @@ export function clearRole() {
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const role = getRole();
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(options.body instanceof FormData
+      ? {}
+      : { "Content-Type": "application/json" }),
     ...(options.headers as Record<string, string>),
   };
   if (role && import.meta.env.DEV) headers["x-demo-role"] = role;
@@ -37,10 +74,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     json = JSON.parse(text) as typeof json;
   } catch {
-    throw new Error(`Server returned an invalid response (HTTP ${res.status})`);
+    throw new ApiError(
+      `Server returned an invalid response (HTTP ${res.status})`,
+      res.status
+    );
   }
-  if (!json.success) {
-    throw new Error(json.error ?? `API error ${res.status}`);
+  if (!res.ok || !json.success) {
+    throw new ApiError(json.error ?? `API error ${res.status}`, res.status);
   }
   return json.data as T;
 }
@@ -54,39 +94,46 @@ export const authApi = {
       body: JSON.stringify({ destination, channel }),
     });
   },
-  verifyOtp(
+  async verifyOtp(
     destination: string,
     code: string,
     channel: "email" | "sms" = "email",
     role = "citizen",
     displayName?: string
   ) {
-    return request<{ id: string; role: string; name: string }>(
-      "/auth/verify-otp",
-      {
-        method: "POST",
-        body: JSON.stringify({ destination, code, channel, role, displayName }),
-      }
-    );
+    const user = await request<AuthUser>("/auth/verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ destination, code, channel, role, displayName }),
+    });
+    setRole(user.role);
+    notifyAuthChanged(user);
+    notifyAuthReady(user);
+    return user;
   },
-  login(role: string) {
+  async login(role: string) {
     setRole(role);
-    return request<{ id: string; role: string; name: string }>("/auth/login", {
+    const user = await request<AuthUser>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ role }),
     });
+    setRole(user.role);
+    notifyAuthChanged(user);
+    notifyAuthReady(user);
+    return user;
   },
   me() {
-    return request<{ id: string; role: string; name: string } | null>(
-      "/auth/me"
-    );
+    return request<AuthUser | null>("/auth/me");
   },
   mode() {
     return request<{ demoLoginEnabled: boolean }>("/auth/mode");
   },
-  logout() {
+  async logout() {
     clearRole();
-    return request("/auth/logout", { method: "POST" });
+    try {
+      return await request("/auth/logout", { method: "POST" });
+    } finally {
+      notifyAuthChanged(null);
+    }
   },
 };
 
@@ -133,10 +180,16 @@ export interface ApiIssue {
   category: string;
   status: string;
   departmentId?: string;
+  department?: string;
+  departmentName?: string | null;
   wardId?: string;
   ward?: string;
+  wardName?: string | null;
+  assignedTo?: string | null;
+  assignedOfficer?: string;
   priority: number;
   urgencyExplanation?: string;
+  aiConfidence?: number;
   latitude?: number;
   longitude?: number;
   supporterCount: number;
@@ -146,13 +199,36 @@ export interface ApiIssue {
   slaDeadline?: string;
   slaDeadlineDays?: number;
   proofState: string;
+  verificationVotes?: {
+    fixed: number;
+    notFixed: number;
+    unsure: number;
+    total?: number;
+  };
   createdAt: string;
   updatedAt: string;
   age: string;
+  updatedAge?: string;
   ageInDays: number;
   reporterId?: string;
-  events?: Array<{ id: string; fromStatus?: string; toStatus: string; actorRole: string; reason?: string; createdAt: string }>;
-  media?: Array<{ id: string; type: string; privatePath?: string; publicPath?: string; mimeType?: string }>;
+  events?: Array<{
+    id: string;
+    issueId?: string;
+    fromStatus?: string | null;
+    toStatus: string;
+    actor?: string;
+    actorRole: string;
+    reason?: string | null;
+    timestamp?: string;
+    createdAt?: string;
+  }>;
+  media?: Array<{
+    id: string;
+    type: string;
+    privatePath?: string;
+    publicPath?: string;
+    mimeType?: string;
+  }>;
 }
 
 export interface ApiIssueList {
@@ -228,10 +304,36 @@ export const issuesApi = {
   assign(id: string) {
     return request<ApiIssue>(`/issues/${id}/assign`, { method: "POST" });
   },
-  submitProof(id: string, note?: string) {
+  uploadMedia(
+    id: string,
+    dataUrl: string,
+    type: "before" | "after" | "proof" = "after",
+  ) {
+    return request<{ id: string; publicPath?: string }>(`/issues/${id}/media`, {
+      method: "POST",
+      body: JSON.stringify({ dataUrl, type }),
+    });
+  },
+  async submitProof(
+    id: string,
+    note?: string,
+    photoDataUrl?: string,
+    mediaId?: string,
+  ) {
+    let resolvedMediaId =
+      mediaId ??
+      (photoDataUrl && !photoDataUrl.startsWith("data:")
+        ? photoDataUrl
+        : undefined);
+    if (!resolvedMediaId && photoDataUrl?.startsWith("data:")) {
+      const uploaded = await this.uploadMedia(id, photoDataUrl, "after");
+      resolvedMediaId = uploaded.id;
+    }
     return request<ApiIssue>(`/issues/${id}/proof`, {
       method: "POST",
-      body: JSON.stringify({ note }),
+      body: JSON.stringify(
+        resolvedMediaId ? { note, mediaId: resolvedMediaId } : { note },
+      ),
     });
   },
   reviewProof(id: string, decision: "accepted" | "rejected") {
@@ -310,11 +412,51 @@ export const mapApi = {
 
 // ── Scorecards / Transparency ─────────────────────────────────────────────────
 
+export interface ScorecardGroupMetrics {
+  totalIssues: number;
+  resolvedIssues: number;
+  activeIssues: number;
+  slaCompliance: number;
+  medianResolutionDays: number;
+  reopenRate: number;
+}
+
+export interface ScorecardWardSummary extends ScorecardGroupMetrics {
+  wardId: string;
+  ward: string;
+  wardName: string;
+}
+
+export interface ScorecardDepartmentSummary extends ScorecardGroupMetrics {
+  departmentId: string;
+  department: string;
+  departmentName: string;
+}
+
+export interface ScorecardSnapshotItem extends ScorecardGroupMetrics {
+  wardId: string;
+  ward: string;
+  wardName: string;
+  departmentId: string;
+  department: string;
+  departmentName: string;
+  period: string;
+  methodVersion?: string;
+}
+
 export interface ScorecardData {
   total: number;
   resolved: number;
+  active?: number;
   pastSLA: number;
   resolutionRate: number;
+  slaCompliance?: number;
+  medianResolutionDays?: number;
+  reopenRate?: number;
+  period?: string;
+  snapshots?: ScorecardSnapshotItem[];
+  byWard?: ScorecardWardSummary[];
+  byDepartment?: ScorecardDepartmentSummary[];
   timestamp: string;
 }
 
@@ -346,6 +488,11 @@ export interface ModelPrediction {
   module: string;
   prediction: unknown;
   confidence: number;
+  rawConfidence?: number;
+  calibratedConfidence?: number;
+  status?: string;
+  abstained?: boolean;
+  abstentionReason?: string | null;
   modelVersion: string;
   dataVersion: string;
   explanation?: string;
@@ -365,16 +512,56 @@ export interface DuplicateCandidate {
   createdAt: string;
 }
 
+export interface AnnotationTask {
+  id: string;
+  language: string;
+  text: string;
+  category: string;
+  priority: number;
+  ward: string;
+  annotation: {
+    category: string;
+    priority: number;
+    duplicateLabel?: string | null;
+    rationale?: string | null;
+  } | null;
+}
+
+export interface AnnotationStats {
+  targetRecords: number;
+  totalAnnotations: number;
+  byAnnotator: Array<{ annotatorId: string; completed: number }>;
+  completeRecords: number;
+  majorityAgreement: number | null;
+}
+
+export interface SaveAnnotationInput {
+  recordId: string;
+  annotatorId: string;
+  category: string;
+  priority: number;
+  duplicateLabel?: string;
+  rationale?: string;
+}
+
 export const researchApi = {
   getPredictions(issueId?: string) {
     const qs = new URLSearchParams();
     if (issueId) qs.set("issueId", issueId);
-    return request<ModelPrediction[]>(`/research/predictions?${qs}`);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<ModelPrediction[]>(`/research/predictions${suffix}`);
+  },
+  getAbstentions() {
+    return request<ModelPrediction[]>("/research/abstentions");
   },
   getDuplicates(status?: string) {
     const qs = new URLSearchParams();
     if (status) qs.set("status", status);
-    return request<DuplicateCandidate[]>(`/research/duplicates?${qs}`);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    return request<DuplicateCandidate[]>(`/research/duplicates${suffix}`);
+  },
+  getProofAudit() {
+    return request<Array<Record<string, unknown>>>("/research/proof-audit");
   },
   getAuditLedger() {
     return request<{
@@ -392,6 +579,22 @@ export const researchApi = {
   },
   getAIMetadata() {
     return request<unknown>("/research/ai/metadata");
+  },
+  getAnnotationTasks(annotatorId = "annotator-a") {
+    const qs = new URLSearchParams({ annotatorId });
+    return request<AnnotationTask[]>(`/research/annotation/tasks?${qs}`);
+  },
+  getAnnotationStats() {
+    return request<AnnotationStats>("/research/annotation/stats");
+  },
+  saveAnnotation(payload: SaveAnnotationInput) {
+    return request<unknown>("/research/annotation", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  getAnnotationExportUrl() {
+    return `${BASE}/research/annotation/export`;
   },
 };
 
@@ -435,11 +638,20 @@ export interface ChainVerificationResult {
   totalEvents?: number;
 }
 
+export interface GlobalChainVerificationResult {
+  valid: boolean;
+  totalEvents: number;
+  brokenAt?: string;
+  checkedAt: string;
+  chainValid?: boolean;
+  eventCount?: number;
+}
+
 export const auditApi = {
   verifyIssue(issueId: string) {
     return request<ChainVerificationResult>(`/audit/verify/${issueId}`);
   },
   verifyGlobal() {
-    return request<ChainVerificationResult>("/audit/verify");
+    return request<GlobalChainVerificationResult>("/audit/verify");
   },
 };

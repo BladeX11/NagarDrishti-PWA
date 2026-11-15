@@ -27,10 +27,16 @@ export function formatQueueIssue(issue: any) {
   const ageDisplay: string =
     issue?.age ||
     (issue?.ageInDays !== undefined ? `${issue.ageInDays}d ago` : "Recent");
-  const overdueDays = Math.max(
+  let overdueDays = Math.max(
     1,
     (issue?.ageInDays ?? 0) - (issue?.slaDeadlineDays ?? 7)
   );
+  if (issue?.slaDeadline) {
+    const deadlineMs = new Date(issue.slaDeadline).getTime();
+    if (!Number.isNaN(deadlineMs)) {
+      overdueDays = Math.max(1, Math.floor((Date.now() - deadlineMs) / 86400000));
+    }
+  }
 
   return {
     displayId,
@@ -84,7 +90,7 @@ export function filterAndSortQueueIssues(
 
   return [...filtered].sort((a: any, b: any) => {
     if (sort === "Oldest") {
-      return (a?.ageInDays ?? 0) - (b?.ageInDays ?? 0);
+      return (b?.ageInDays ?? 0) - (a?.ageInDays ?? 0);
     }
     if (sort === "Most supporters") {
       return (

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -9,14 +10,126 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { issues as seedIssues } from "../../data/seed";
+import {
+  authApi,
+  issuesApi,
+  transparencyApi,
+  type ApiIssue,
+  type ScorecardData,
+} from "../../lib/api";
 import { Button } from "../../components/shared/Button";
 import { IssueCard } from "../../components/shared/IssueCard";
 import { DemoNote } from "../../components/shared/Primitives";
+import { formatWardLabel } from "./constants";
 
 export function CitizenHome() {
-  const alerts = seedIssues.filter(
+  const [liveIssues, setLiveIssues] = useState<ApiIssue[] | null>(null);
+  const [issuesLoading, setIssuesLoading] = useState(true);
+  const [issuesError, setIssuesError] = useState(false);
+  const [scorecard, setScorecard] = useState<ScorecardData | null>(null);
+  const [scorecardError, setScorecardError] = useState(false);
+  const [profile, setProfile] = useState<{
+    id: string;
+    role: string;
+    name: string;
+    ward?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    issuesApi
+      .list({ limit: 50 })
+      .then(res => {
+        if (!active) return;
+        setLiveIssues(res.items);
+        setIssuesError(false);
+      })
+      .catch(() => {
+        if (active) setIssuesError(true);
+      })
+      .finally(() => {
+        if (active) setIssuesLoading(false);
+      });
+
+    transparencyApi
+      .getScorecard()
+      .then(data => {
+        if (!active) return;
+        setScorecard(data);
+        setScorecardError(false);
+      })
+      .catch(() => {
+        if (active) setScorecardError(true);
+      });
+
+    authApi
+      .me()
+      .then(user => {
+        if (active) setProfile(user);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const displayIssues: any[] = issuesError
+    ? seedIssues
+    : liveIssues ?? [];
+  const alerts = displayIssues.filter(
     issue => issue.status === "Claimed Resolved"
   );
+
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat("en-IN", {
+    weekday: "long",
+  }).format(now);
+  const hour = now.getHours();
+  const greeting =
+    hour < 12
+      ? "Good morning,"
+      : hour < 17
+        ? "Good afternoon,"
+        : "Good evening,";
+  const displayName = profile?.name?.trim() || "Citizen";
+  const wardSublabel = profile?.ward
+    ? `${formatWardLabel(profile.ward)} · Pune`
+    : "Pune civic network";
+
+  const snapshotStats: [string, string][] = scorecard
+    ? [
+        [
+          scorecard.total > 0
+            ? `${Math.round(((scorecard.total - scorecard.pastSLA) / scorecard.total) * 100)}%`
+            : "0%",
+          "SLA met",
+        ],
+        [
+          String(Math.max(0, scorecard.total - scorecard.resolved)),
+          "Active issues",
+        ],
+        [
+          typeof (scorecard as any).medianResolutionDays === "number"
+            ? `${Number((scorecard as any).medianResolutionDays).toFixed(1)}d`
+            : `${Math.round(scorecard.resolutionRate)}%`,
+          typeof (scorecard as any).medianResolutionDays === "number"
+            ? "Avg. resolve"
+            : "Resolved rate",
+        ],
+      ]
+    : scorecardError
+      ? [
+          ["78%", "SLA met"],
+          ["42", "Active issues"],
+          ["3.2d", "Avg. resolve"],
+        ]
+      : [
+          ["...", "SLA met"],
+          ["...", "Active issues"],
+          ["...", "Resolved rate"],
+        ];
+
   const actions: [string, string, LucideIcon, string, string][] = [
     [
       "Report an issue",
@@ -47,16 +160,16 @@ export function CitizenHome() {
         <span className="absolute right-6 top-6 h-10 w-10 rounded-full border-4 border-[#B8892D] sm:right-8 sm:top-7 sm:h-12 sm:w-12" />
         <span className="absolute right-24 top-14 hidden h-8 w-8 rotate-45 bg-[#D8C9A8] md:block" />
         <p className="mb-2 text-xs font-black uppercase tracking-[.16em] text-[#D8C9A8] sm:text-[10px] sm:tracking-[.2em]">
-          Tuesday · Pune civic pulse
+          {weekday} · Pune civic pulse
         </p>
         <h1 className="display-title max-w-xl text-3xl text-white sm:text-4xl">
-          Good morning,
+          {greeting}
           <br />
-          Neel.
+          {displayName}.
         </h1>
-        <p className="mt-2.5 text-sm font-bold text-[#D8C9A8]">Ward 12 · Pune</p>
+        <p className="mt-2.5 text-sm font-bold text-[#D8C9A8]">{wardSublabel}</p>
         <p className="mt-1.5 text-sm text-white/85">
-          Here’s what’s happening around you.
+          Here's what's happening around you.
         </p>
         <Link to="/citizen/report" className="mt-5 block sm:hidden">
           <Button variant="gold" className="min-h-[48px] w-full text-[#2A3320]">
@@ -90,7 +203,7 @@ export function CitizenHome() {
                 vote
               </p>
               <p className="mt-1 text-sm text-[#2A3320]/75">
-                “{alerts[0].title}” was claimed resolved. Is it fixed?
+                "{alerts[0].title}" was claimed resolved. Is it fixed?
               </p>
               <Link
                 to={`/citizen/issue/${alerts[0].id}/verify`}
@@ -108,7 +221,7 @@ export function CitizenHome() {
             <div>
               <p className="eyebrow">Your neighbourhood</p>
               <h2 className="display-title mt-1 text-xl">
-                What’s happening nearby
+                What's happening nearby
               </h2>
             </div>
             <Link
@@ -118,23 +231,40 @@ export function CitizenHome() {
               View map →
             </Link>
           </div>
-          <div className="divide-y-2 divide-[#E8E0D0] border-x-2 border-t-2 border-[#2A3320] bg-[#FDFBF7]">
-            {seedIssues.slice(0, 3).map(issue => (
-              <IssueCard key={issue.id} issue={issue} variant="compact" />
-            ))}
-          </div>
+          {issuesError && (
+            <p className="mb-2 border-2 border-[#B8892D] bg-[#B8892D]/15 px-3 py-2 text-xs font-bold text-[#2A3320]">
+              Live issue feed unavailable — showing offline demo records.
+            </p>
+          )}
+          {issuesLoading && !issuesError ? (
+            <div className="border-2 border-[#2A3320] bg-[#FDFBF7] px-4 py-6 text-xs font-bold uppercase tracking-wider text-[#2A3320]/60">
+              Loading nearby reports...
+            </div>
+          ) : displayIssues.length > 0 ? (
+            <div className="divide-y-2 divide-[#E8E0D0] border-x-2 border-t-2 border-[#2A3320] bg-[#FDFBF7]">
+              {displayIssues.slice(0, 3).map(issue => (
+                <IssueCard key={issue.id} issue={issue} variant="compact" />
+              ))}
+            </div>
+          ) : (
+            <div className="border-2 border-[#2A3320] bg-[#FDFBF7] px-4 py-6 text-sm text-[#2A3320]/70">
+              No public issues reported yet.{" "}
+              <Link to="/citizen/report" className="font-bold text-[#4F5B2A] underline">
+                Report the first issue
+              </Link>
+              .
+            </div>
+          )}
         </section>
         <section>
           <div className="mb-3 border-b-4 border-[#2A3320] pb-3">
             <p className="eyebrow">At a glance</p>
-            <h2 className="display-title mt-1 text-xl">Ward 12 snapshot</h2>
+            <h2 className="display-title mt-1 text-xl">
+              {scorecard ? "Civic snapshot" : "Ward 12 snapshot"}
+            </h2>
           </div>
           <div className="grid grid-cols-3 border-4 border-[#2A3320] bg-[#D8C9A8]">
-            {[
-              ["78%", "SLA met"],
-              ["42", "Active issues"],
-              ["3.2d", "Avg. resolve"],
-            ].map(([v, l]) => (
+            {snapshotStats.map(([v, l]) => (
               <div
                 key={l}
                 className="border-r-2 border-[#2A3320] p-4 last:border-r-0"
@@ -147,7 +277,11 @@ export function CitizenHome() {
             ))}
           </div>
           <p className="mt-3 text-[9px] font-bold uppercase tracking-wider text-[#2A3320]/50">
-            Demo data · Ward 12 snapshot
+            {scorecard
+              ? "Live database snapshot · Pune civic network"
+              : scorecardError
+                ? "Fallback demo data · Live scorecard unavailable"
+                : "Loading live scorecard..."}
           </p>
           <div className="mt-5 border-2 border-[#2A3320] bg-[#FDFBF7] p-4">
             <div className="flex items-center gap-2">
@@ -162,7 +296,9 @@ export function CitizenHome() {
           </div>
         </section>
       </div>
-      <DemoNote />
+      {(issuesError || scorecardError) && (
+        <DemoNote>Fallback demo data · Some live metrics could not be reached</DemoNote>
+      )}
     </div>
   );
 }

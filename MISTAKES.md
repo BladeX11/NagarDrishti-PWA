@@ -67,3 +67,9 @@
 **Context:** `client/src/pages/officer/OfficerPages.tsx` (`TriageQueue`), `server/services/issueService.ts` (`listIssues`, `getIssue`), and `client/src/App.tsx`.
 **Solution:** Handled undefined `ward` by resolving against `wardId` with fallback to `"—"` before calling `.replace()`. Guarded `"●".repeat()` and priority labels against `NaN`/undefined priority values. Populated normalized `ward`, `supporters`, and `slaDeadlineDays` in `issueService.ts`, and wrapped the application root in `<ErrorBoundary>` to avoid unhandled white screens.
 **Date:** 2026-11-15
+
+### Vitest SSR Test Failing With `React is not defined` & Missing Locked Dependencies After Pull/Audit
+**Problem:** Running `tsc --noEmit` locally initially failed with `TS2307` for `web-push` and `@aws-sdk/client-s3` even though both were in `package.json` and `pnpm-lock.yaml`; after syncing packages, `tests/triageQueue.test.ts` failed in Vitest with `ReferenceError: React is not defined` inside `OfficerPages.tsx`.
+**Context:** `nagardrishti-frontend/vitest.config.ts`, `tsconfig.json` (`"jsx": "preserve"`), and `client/src/pages/officer/OfficerPages.tsx` (automatic JSX runtime without default `React` import).
+**Solution:** Synced `node_modules` with `& ".\node_modules\.bin\pnpm.cmd" install --frozen-lockfile` (note `pnpm` is local in `node_modules/.bin` on this machine rather than global PATH) and added `esbuild: { jsx: 'automatic' }` to `vitest.config.ts` so Vitest matches Vite's React automatic JSX transform.
+**Date:** 2026-11-15

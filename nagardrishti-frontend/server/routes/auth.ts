@@ -1,10 +1,15 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { createHash, createHmac, randomBytes, randomUUID } from 'crypto';
-import { desc, eq } from 'drizzle-orm';
+import { rateLimit } from 'express-rate-limit';
+import { and, desc, eq, isNull } from 'drizzle-orm';
+import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { otpChallenges, sessions, users } from '../db/schema.js';
+import { findDemoUser, getDemoRoleFromRequest } from '../middleware/auth.js';
 
 const router = Router();
+const VALID_ROLES = new Set(['citizen', 'officer', 'admin', 'researcher']);
+const PRIVILEGED_ROLES = new Set(['officer', 'admin', 'researcher']);
 
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
@@ -21,6 +26,78 @@ function hashSecret(value: string) {
 function createOtp() {
   return randomBytes(4).readUInt32BE(0).toString().padStart(6, '0').slice(-6);
 }
+
+function parseProvisionedEmails(raw?: string): Set<string> {
+  return new Set(
+    (raw || '')
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
+function isEmailProvisionedForRole(role: string, destination: string, channel: 'email' | 'sms'): boolean {
+  if (channel !== 'email') return false;
+  if (role === 'officer') return parseProvisionedEmails(process.env.OFFICER_EMAILS).has(destination);
+  if (role === 'admin') return parseProvisionedEmails(process.env.ADMIN_EMAILS).has(destination);
+  if (role === 'researcher') return parseProvisionedEmails(process.env.RESEARCHER_EMAILS).has(destination);
+  return role === 'citizen';
+}
+
+function isSecureCookie(req: Request): boolean {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const isForwardedHttps = Array.isArray(forwardedProto)
+    ? forwardedProto.some((value) => value.split(',')[0].trim().toLowerCase() === 'https')
+    : typeof forwardedProto === 'string' && forwardedProto.split(',')[0].trim().toLowerCase() === 'https';
+  return config.NODE_ENV === 'production' && (req.secure || isForwardedHttps);
+}
+
+function createOtpRateLimiter(options: {
+  windowMs: number;
+  max: number;
+  byDestination?: boolean;
+  message: string;
+}) {
+  return rateLimit({
+    windowMs: options.windowMs,
+    max: options.max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: options.message },
+    skip: options.byDestination
+      ? (req: Request) => !normalizeDestination(req.body?.destination)
+      : undefined,
+    keyGenerator: options.byDestination
+      ? (req: Request) => `dest:${hashSecret(normalizeDestination(req.body?.destination))}`
+      : undefined,
+  });
+}
+
+const requestOtpIpLimiter = createOtpRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: 'Too many OTP requests from this IP. Please try again later.',
+});
+
+const requestOtpDestLimiter = createOtpRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  byDestination: true,
+  message: 'Too many OTP requests for this destination. Please try again later.',
+});
+
+const verifyOtpIpLimiter = createOtpRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: 'Too many verification attempts from this IP. Please try again later.',
+});
+
+const verifyOtpDestLimiter = createOtpRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  byDestination: true,
+  message: 'Too many verification attempts for this destination. Please try again later.',
+});
 
 async function sendOtp(destination: string, channel: 'email' | 'sms', code: string) {
   if (channel === 'email' && process.env.RESEND_API_KEY && process.env.OTP_FROM_EMAIL) {
@@ -55,14 +132,14 @@ async function sendOtp(destination: string, channel: 'email' | 'sms', code: stri
   console.info(`[otp:${channel}] ${destination}: ${code}`);
 }
 
-async function createSession(user: { id: string; role: string; displayName: string }, res: any) {
+async function createSession(user: { id: string; role: string; displayName: string }, req: Request, res: Response) {
   const token = randomBytes(32).toString('hex');
   await db.insert(sessions).values({ id: randomUUID(), userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
-  res.cookie('nd_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
+  res.cookie('nd_session', token, { httpOnly: true, sameSite: 'lax', secure: isSecureCookie(req), maxAge: 7 * 24 * 60 * 60 * 1000 });
   return { id: user.id, role: user.role, name: user.displayName };
 }
 
-router.post('/request-otp', async (req, res) => {
+router.post('/request-otp', requestOtpIpLimiter, requestOtpDestLimiter, async (req, res) => {
   try {
     const destination = normalizeDestination(req.body.destination);
     const channel = req.body.channel === 'sms' ? 'sms' : 'email';
@@ -76,7 +153,7 @@ router.post('/request-otp', async (req, res) => {
   }
 });
 
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', verifyOtpIpLimiter, verifyOtpDestLimiter, async (req, res) => {
   try {
     const destination = normalizeDestination(req.body.destination);
     const code = String(req.body.code ?? '').trim();
@@ -90,20 +167,51 @@ router.post('/verify-otp', async (req, res) => {
       await db.update(otpChallenges).set({ attempts: challenge.attempts + 1 }).where(eq(otpChallenges.id, challenge.id));
       return res.status(401).json({ success: false, error: 'Incorrect verification code' });
     }
-    await db.update(otpChallenges).set({ consumedAt: new Date() }).where(eq(otpChallenges.id, challenge.id));
+
+    const requestedRoleRaw = req.body.role;
+    if (requestedRoleRaw !== undefined && requestedRoleRaw !== '' && (typeof requestedRoleRaw !== 'string' || !VALID_ROLES.has(requestedRoleRaw))) {
+      return res.status(400).json({ success: false, error: 'Invalid role' });
+    }
+    const requestedRole = typeof requestedRoleRaw === 'string' && VALID_ROLES.has(requestedRoleRaw) ? requestedRoleRaw : 'citizen';
+
     const destinationColumn = channel === 'email' ? { emailHash: destinationHash } : { phoneHash: destinationHash };
     let [user] = channel === 'email'
       ? await db.select().from(users).where(eq(users.emailHash, destinationHash)).limit(1)
       : await db.select().from(users).where(eq(users.phoneHash, destinationHash)).limit(1);
-    if (!user) {
-      const role = req.body.role === 'officer' || req.body.role === 'admin' || req.body.role === 'researcher' ? req.body.role : 'citizen';
-      const provisionedOfficerEmails = (process.env.OFFICER_EMAILS || '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
-      if (role !== 'citizen' && process.env.NODE_ENV === 'production' && !provisionedOfficerEmails.includes(destination)) {
-        return res.status(403).json({ success: false, error: 'This account must be provisioned by an administrator' });
-      }
-      [user] = await db.insert(users).values({ ...destinationColumn, displayName: req.body.displayName || 'NagarDrishti Citizen', role }).returning();
+
+    const allowDevDemoSelfAssign = process.env.NODE_ENV !== 'production' && process.env.ALLOW_DEMO_LOGIN === 'true';
+    const isPrivilegedRequest = PRIVILEGED_ROLES.has(requestedRole);
+    const hasExistingMatchingRole = Boolean(user && user.role === requestedRole);
+    const isProvisioned = isEmailProvisionedForRole(requestedRole, destination, channel);
+
+    // Check role eligibility before consuming OTP so rejected role attempts do not burn the challenge
+    if (isPrivilegedRequest && !hasExistingMatchingRole && !allowDevDemoSelfAssign && !isProvisioned) {
+      return res.status(403).json({ success: false, error: 'This account must be provisioned by an administrator' });
     }
-    res.json({ success: true, data: await createSession(user, res) });
+
+    const [consumed] = await db
+      .update(otpChallenges)
+      .set({ consumedAt: new Date() })
+      .where(and(eq(otpChallenges.id, challenge.id), isNull(otpChallenges.consumedAt)))
+      .returning();
+    if (!consumed) {
+      return res.status(400).json({ success: false, error: 'Code expired or not found' });
+    }
+
+    if (!user) {
+      const displayName =
+        typeof req.body.displayName === 'string' && req.body.displayName.trim()
+          ? req.body.displayName.trim().slice(0, 80)
+          : `NagarDrishti ${requestedRole.charAt(0).toUpperCase() + requestedRole.slice(1)}`;
+      [user] = await db.insert(users).values({ ...destinationColumn, displayName, role: requestedRole }).returning();
+    } else if (user.role === 'citizen' && isPrivilegedRequest && isProvisioned) {
+      [user] = await db
+        .update(users)
+        .set({ role: requestedRole, updatedAt: new Date() })
+        .where(eq(users.id, user.id))
+        .returning();
+    }
+    res.json({ success: true, data: await createSession(user, req, res) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -122,7 +230,7 @@ router.post('/login', async (req, res) => {
   try {
     if (process.env.NODE_ENV === 'production' && process.env.ALLOW_DEMO_LOGIN !== 'true') return res.status(410).json({ success: false, error: 'Role-based login is disabled. Use OTP verification.' });
     const { role } = req.body;
-    if (!['citizen', 'officer', 'admin', 'researcher'].includes(role)) {
+    if (!VALID_ROLES.has(role)) {
       return res.status(400).json({ success: false, error: 'Invalid role' });
     }
 
@@ -130,11 +238,7 @@ router.post('/login', async (req, res) => {
     if (!user) {
       [user] = await db.insert(users).values({ displayName: req.body.displayName || `${role.charAt(0).toUpperCase() + role.slice(1)} Demo`, role }).returning();
     }
-    const token = randomBytes(32).toString('hex');
-    await db.insert(sessions).values({ id: randomUUID(), userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) });
-    res.cookie('nd_session', token, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 7 * 24 * 60 * 60 * 1000 });
-
-    res.json({ success: true, data: { id: user.id, role: user.role, name: user.displayName } });
+    res.json({ success: true, data: await createSession(user, req, res) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -143,7 +247,7 @@ router.post('/login', async (req, res) => {
 router.post('/logout', async (req, res) => {
   const token = req.cookies?.nd_session;
   if (token) await db.delete(sessions).where(eq(sessions.tokenHash, hashToken(token))).catch(() => undefined);
-  res.clearCookie('nd_session');
+  res.clearCookie('nd_session', { httpOnly: true, sameSite: 'lax', secure: isSecureCookie(req) });
   res.json({ success: true });
 });
 
@@ -154,19 +258,13 @@ router.get('/me', async (req, res) => {
       const [row] = await db.select({ user: users, session: sessions }).from(sessions).innerJoin(users, eq(sessions.userId, users.id)).where(eq(sessions.tokenHash, hashToken(token))).limit(1);
       if (row?.session.expiresAt && row.session.expiresAt > new Date()) return res.json({ success: true, data: { id: row.user.id, role: row.user.role, name: row.user.displayName } });
     }
-    const role = process.env.NODE_ENV === 'production' ? undefined : (req.headers['x-demo-role'] || req.cookies?.role);
+    const role = getDemoRoleFromRequest(req);
     if (!role) {
       return res.json({ success: true, data: null });
     }
-    
-    res.json({ 
-      success: true, 
-      data: {
-        id: `user-${role}-001`,
-        role,
-        name: `${role.charAt(0).toUpperCase() + role.slice(1)} Demo`
-      }
-    });
+
+    const demoUser = await findDemoUser(role);
+    return res.json({ success: true, data: demoUser });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

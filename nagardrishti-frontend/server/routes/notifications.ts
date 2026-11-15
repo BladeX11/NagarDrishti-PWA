@@ -1,14 +1,20 @@
 import { Router } from "express";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { issues, pushSubscriptions, statusEvents } from "../db/schema.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { notificationService } from "../services/notificationService.js";
 
 const router = Router();
+const NOTIFICATION_ROLES = ["citizen", "officer", "admin", "researcher"] as const;
 
-router.get("/", requireAuth, requireRole("citizen"), async (req, res) => {
+router.get("/", requireAuth, requireRole(...NOTIFICATION_ROLES), async (req, res) => {
   try {
+    const issueScope =
+      req.user!.role === "officer" || req.user!.role === "admin"
+        ? or(eq(issues.reporterId, req.user!.id), eq(issues.assignedTo, req.user!.id))
+        : eq(issues.reporterId, req.user!.id);
+
     const userIssues = await db
       .select({
         id: issues.id,
@@ -18,10 +24,12 @@ router.get("/", requireAuth, requireRole("citizen"), async (req, res) => {
         updatedAt: issues.updatedAt,
       })
       .from(issues)
-      .where(eq(issues.reporterId, req.user!.id))
+      .where(issueScope)
       .orderBy(desc(issues.updatedAt))
       .limit(50);
-    const issueIds = userIssues.map(issue => issue.id);
+
+    const issueIds = userIssues.map((issue) => issue.id);
+    const issueById = new Map(userIssues.map((issue) => [issue.id, issue]));
     const events = issueIds.length
       ? await db
           .select()
@@ -30,8 +38,8 @@ router.get("/", requireAuth, requireRole("citizen"), async (req, res) => {
           .orderBy(desc(statusEvents.createdAt))
           .limit(100)
       : [];
-    const data = events.map(event => {
-      const issue = userIssues.find(item => item.id === event.issueId);
+    const data = events.map((event) => {
+      const issue = event.issueId ? issueById.get(event.issueId) : undefined;
       return {
         id: event.id,
         issueId: event.issueId,
@@ -61,7 +69,7 @@ router.get("/vapid-public-key", (_req, res) => {
 router.post(
   "/subscribe",
   requireAuth,
-  requireRole("citizen", "officer", "admin", "researcher"),
+  requireRole(...NOTIFICATION_ROLES),
   async (req, res) => {
     try {
       const { endpoint, keys } = req.body;
@@ -98,16 +106,23 @@ router.post(
   }
 );
 
-router.delete("/subscribe", requireAuth, async (req, res) => {
-  try {
-    if (req.body.endpoint)
-      await db
-        .delete(pushSubscriptions)
-        .where(eq(pushSubscriptions.endpoint, req.body.endpoint));
-    res.json({ success: true, data: { subscribed: false } });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+router.delete(
+  "/subscribe",
+  requireAuth,
+  requireRole(...NOTIFICATION_ROLES),
+  async (req, res) => {
+    try {
+      const endpoint = typeof req.body?.endpoint === "string" ? req.body.endpoint : "";
+      if (endpoint) {
+        await db
+          .delete(pushSubscriptions)
+          .where(and(eq(pushSubscriptions.endpoint, endpoint), eq(pushSubscriptions.userId, req.user!.id)));
+      }
+      res.json({ success: true, data: { subscribed: false } });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
   }
-});
+);
 
 export default router;

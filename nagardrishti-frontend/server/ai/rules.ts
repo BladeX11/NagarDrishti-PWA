@@ -14,10 +14,18 @@ const CATEGORY_KEYWORDS: Record<Category, string[]> = {
   other: [],
 };
 
-const DEPARTMENTS: Record<Category, string> = {
-  'pothole/road': 'roads', 'garbage/waste': 'waste', 'drainage/sewage': 'drainage', 'water supply': 'water',
-  'streetlight/electrical': 'electrical', 'stray animals': 'animals', encroachment: 'civic-works', other: 'civic-works',
+export const CATEGORY_DEPARTMENTS: Record<Category, string> = {
+  'pothole/road': 'roads',
+  'garbage/waste': 'waste',
+  'drainage/sewage': 'drainage',
+  'water supply': 'water',
+  'streetlight/electrical': 'electrical',
+  'stray animals': 'animals',
+  encroachment: 'civic-works',
+  other: 'civic-works',
 };
+
+const DEPARTMENTS: Record<Category, string> = CATEGORY_DEPARTMENTS;
 
 function categoryScore(text: string, category: Category): number {
   const normalized = text.toLowerCase();
@@ -42,7 +50,8 @@ export function predictCategory(context: IssueInferenceContext): Prediction<Cate
 }
 
 export function predictDepartment(category: Category): Prediction<string> {
-  const department = DEPARTMENTS[category] ?? DEPARTMENTS.other;
+  const normalized = String(category ?? '').trim().toLowerCase() as Category;
+  const department = DEPARTMENTS[category] ?? DEPARTMENTS[normalized] ?? DEPARTMENTS.other;
   return {
     module: 'M2', prediction: department, confidence: 0.88, modelVersion: AI_VERSION, dataVersion: AI_DATA_VERSION, status: 'pending',
     explanation: `Category-to-service policy maps ${category} to ${department}.`,

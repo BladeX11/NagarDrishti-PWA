@@ -16,7 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { BoxGeometry } from "three";
 import type { Group, Mesh } from "three";
 import L from "leaflet";
@@ -57,6 +57,8 @@ function GeometricScene() {
     color: [C.olive, C.gold, C.sand][i % 3],
     scale: 0.12 + (i % 3) * 0.045,
   })), []);
+  const edgeBox = useMemo(() => new BoxGeometry(2.58, 2.58, 2.58), []);
+  useEffect(() => () => edgeBox.dispose(), [edgeBox]);
 
   useFrame(({ pointer, clock }) => {
     const t = clock.getElapsedTime();
@@ -77,7 +79,7 @@ function GeometricScene() {
         <boxGeometry args={[2.55, 2.55, 2.55]} />
         <meshStandardMaterial color={C.sand} flatShading roughness={1} />
         <lineSegments>
-          <edgesGeometry args={[new BoxGeometry(2.58, 2.58, 2.58)]} />
+          <edgesGeometry args={[edgeBox]} />
           <lineBasicMaterial color={C.forest} linewidth={2} />
         </lineSegments>
       </mesh>
@@ -104,8 +106,28 @@ function GeometricScene() {
   );
 }
 
+class WebGLFallbackBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex h-full w-full items-center justify-center border-l-4 border-[#2A3320] bg-[#3A4420] p-8 text-center">
+          <div>
+            <p className="font-['Outfit'] text-xs font-black uppercase tracking-[0.22em] text-[#D8C9A8]">Pune · CivicLens</p>
+            <p className="mt-2 text-sm font-medium text-white/80">Interactive 3D view unavailable on this browser.</p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function HeroCanvas() {
-  return <Canvas camera={{ position: [0, 0, 8], fov: 45 }} dpr={[1, 1.5]} frameloop="always">
+  return <WebGLFallbackBoundary><Canvas camera={{ position: [0, 0, 8], fov: 45 }} dpr={[1, 1.5]} frameloop="always">
     <ambientLight color={C.parchment} intensity={0.7} />
     <directionalLight position={[5, 7, 6]} color="#fff7e6" intensity={3} />
     <Suspense fallback={<Html center><div className="font-black tracking-widest text-[#D8C9A8]">LOADING CITY...</div></Html>}>
@@ -113,7 +135,7 @@ function HeroCanvas() {
       <Sparkles count={35} scale={8} size={2} speed={0.2} color={C.sand} />
     </Suspense>
     <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={0.5} />
-  </Canvas>;
+  </Canvas></WebGLFallbackBoundary>;
 }
 
 
@@ -138,7 +160,7 @@ function MapPreview3D() {
     window.setTimeout(() => map.invalidateSize(), 100);
     return () => { map.remove(); };
   }, []);
-  return <div ref={mapNode} className="absolute inset-0" aria-label="Interactive Pune civic issue map" />;
+  return <div ref={mapNode} className="absolute inset-0 isolate" aria-label="Interactive Pune civic issue map" />;
 }
 
 const steps = [
@@ -179,7 +201,7 @@ export default function HeroLanding() {
       <section className="grid grid-cols-2 border-b-4 border-[#2A3320] bg-[#D8C9A8] lg:grid-cols-4">{[["247", "ISSUES FILED", "square"], ["89%", "ACTED UPON", "circle"], ["12", "WARDS ACTIVE", "diamond"], ["1.2K", "CIVIC VOTES", "square"]].map(([num, label, shape], i) => <div key={label} className={`flex flex-col items-center border-[#2A3320] p-6 text-center sm:p-8 ${i < 2 ? "border-b-2 lg:border-b-0" : ""} ${i % 2 === 0 ? "border-r-2" : ""} lg:border-r-4 lg:last:border-r-0`}><div className={`mb-3 flex h-12 w-12 items-center justify-center border-2 border-[#2A3320] shadow-[3px_3px_0px_0px_#2A3320] sm:mb-4 sm:h-16 sm:w-16 sm:border-4 sm:shadow-[4px_4px_0px_0px_#2A3320] ${shape === "circle" ? "rounded-full" : shape === "diamond" ? "rotate-45" : ""} ${i === 1 ? "bg-[#B8892D]" : i === 2 ? "bg-[#D8C9A8]" : "bg-[#4F5B2A]"}`}><span className="text-white">{i === 0 ? <Square size={20} /> : i === 1 ? <Circle size={20} /> : i === 2 ? <Triangle size={20} /> : <BarChart3 size={20} />}</span></div><strong className="font-['Outfit'] text-3xl font-black tracking-[-0.05em] sm:text-5xl sm:tracking-[-0.08em]">{num}</strong><span className="mt-1.5 font-['Outfit'] text-xs font-black uppercase tracking-[0.12em] text-[#4F5B2A] sm:mt-2 sm:tracking-[0.18em]">{label}</span></div>)}</section>
       <section id="how-it-works" className="border-b-4 border-[#2A3320] px-5 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-28"><div className="mx-auto max-w-[1440px]"><p className="eyebrow">The process</p><h2 className="section-title">From report to resolution</h2><div className="relative mt-10 grid gap-4 sm:mt-14 md:grid-cols-2 lg:grid-cols-4 lg:gap-0">{steps.map(([number, title, body, color], i) => <article key={number} className="group relative border-2 border-[#2A3320] bg-[#FDFBF7] p-6 transition-all duration-200 hover:-translate-y-1 md:border-4 md:p-8 lg:-ml-1 lg:first:ml-0"><div className={`mx-auto mb-5 flex h-12 w-12 rotate-45 items-center justify-center border-2 border-[#2A3320] shadow-[3px_3px_0px_0px_#2A3320] sm:mb-7 sm:h-14 sm:w-14 sm:border-4 sm:shadow-[4px_4px_0px_0px_#2A3320] ${color === "gold" ? "bg-[#B8892D]" : color === "sand" ? "bg-[#D8C9A8]" : "bg-[#4F5B2A]"}`}><span className={`-rotate-45 font-black ${color === "sand" ? "text-[#2A3320]" : "text-white"}`}>{number}</span></div><h3 className="text-center font-black uppercase tracking-wider">{title}</h3><p className="mt-3 text-center text-sm font-medium leading-relaxed text-[#2A3320]/70">{body}</p><span className={`absolute right-3 top-3 h-3 w-3 ${i === 1 ? "bg-[#4F5B2A]" : i === 2 ? "bg-[#D8C9A8]" : "rounded-full bg-[#B8892D]"}`} /></article>)}</div></div></section>
       <section id="features" className="border-b-4 border-[#2A3320] bg-[#4F5B2A] px-5 py-14 text-white sm:px-6 sm:py-20 lg:px-12 lg:py-28"><div className="mx-auto max-w-[1440px]"><p className="eyebrow text-[#D8C9A8]">Capabilities</p><h2 className="section-title text-white">Built for trust, not theatre</h2><div className="mt-10 grid gap-5 sm:mt-12 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">{features.map(([Icon, title, body]) => <article key={title as string} className="relative border-2 border-[#2A3320] bg-[#FDFBF7] p-5 text-[#2A3320] shadow-[4px_4px_0px_0px_#2A3320] transition-all duration-200 hover:-translate-y-1 md:border-4 md:p-6 md:shadow-[8px_8px_0px_0px_#2A3320]"><div className="mb-4 flex h-11 w-11 items-center justify-center border-2 border-[#2A3320] bg-white shadow-[3px_3px_0px_0px_#2A3320] sm:mb-5 sm:h-12 sm:w-12 sm:border-4 sm:shadow-[4px_4px_0px_0px_#2A3320]"><Icon size={22} className="text-[#4F5B2A]" /></div><h3 className="font-black uppercase tracking-wider">{title as string}</h3><p className="mt-2.5 text-sm font-medium leading-relaxed text-[#2A3320]/70">{body as string}</p><span className="absolute right-3 top-3 h-2 w-2 rounded-full bg-[#B8892D]" /></article>)}</div></div></section>
-      <section className="border-b-4 border-[#2A3320] px-5 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-28"><div className="mx-auto max-w-[1440px]"><p className="eyebrow">Live demo</p><h2 className="section-title">See what's happening near you</h2><p className="mt-4 font-medium text-[#2A3320]/70">Synthetic demo data shown below. Real issues, real accountability — once deployed.</p><div className="relative mx-auto mt-8 h-[300px] max-w-5xl overflow-hidden border-2 border-[#2A3320] bg-[#D8C9A8] shadow-[4px_4px_0px_0px_#2A3320] sm:mt-10 sm:h-[420px] sm:border-4 sm:shadow-[8px_8px_0px_0px_#2A3320]"><MapPreview3D /><div className="absolute bottom-4 left-4 z-10 hidden gap-4 border-4 border-[#2A3320] bg-[#FDFBF7] px-4 py-3 text-[10px] font-black uppercase tracking-wider shadow-[4px_4px_0px_0px_#2A3320] sm:flex"><span><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#B8892D]" />Open</span><span><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#4F5B2A]" />In progress</span><span><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#D8C9A8]" />Resolved</span></div><a href="/transparency" className="absolute bottom-3 right-3 z-10 inline-flex min-h-[44px] items-center border-2 border-[#2A3320] bg-[#4F5B2A] px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-[3px_3px_0px_0px_#2A3320] sm:bottom-4 sm:right-4 sm:border-4 sm:py-3 sm:shadow-[4px_4px_0px_0px_#2A3320]">Explore map →</a></div><div className="mx-auto mt-3 flex max-w-5xl flex-wrap items-center justify-between gap-3 border-2 border-[#2A3320] bg-[#FDFBF7] px-4 py-3 text-xs font-bold uppercase tracking-wider sm:hidden"><span><i className="mr-1.5 inline-block h-3 w-3 rounded-full bg-[#B8892D]" />Open</span><span><i className="mr-1.5 inline-block h-3 w-3 rounded-full bg-[#4F5B2A]" />In progress</span><span><i className="mr-1.5 inline-block h-3 w-3 rounded-full bg-[#D8C9A8]" />Resolved</span></div></div></section>
+      <section className="border-b-4 border-[#2A3320] px-5 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-28"><div className="mx-auto max-w-[1440px]"><p className="eyebrow">Live demo</p><h2 className="section-title">See what's happening near you</h2><p className="mt-4 font-medium text-[#2A3320]/70">Synthetic demo data shown below. Real issues, real accountability — once deployed.</p><div className="relative isolate mx-auto mt-8 h-[300px] max-w-5xl overflow-hidden border-2 border-[#2A3320] bg-[#D8C9A8] shadow-[4px_4px_0px_0px_#2A3320] sm:mt-10 sm:h-[420px] sm:border-4 sm:shadow-[8px_8px_0px_0px_#2A3320]"><MapPreview3D /><div className="absolute bottom-4 left-4 z-20 hidden gap-4 border-4 border-[#2A3320] bg-[#FDFBF7] px-4 py-3 text-[10px] font-black uppercase tracking-wider shadow-[4px_4px_0px_0px_#2A3320] sm:flex"><span><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#B8892D]" />Open</span><span><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#4F5B2A]" />In progress</span><span><i className="mr-2 inline-block h-3 w-3 rounded-full bg-[#D8C9A8]" />Resolved</span></div><a href="/transparency" className="absolute bottom-3 right-3 z-20 inline-flex min-h-[44px] items-center border-2 border-[#2A3320] bg-[#4F5B2A] px-4 py-2 text-xs font-black uppercase tracking-wider text-white shadow-[3px_3px_0px_0px_#2A3320] sm:bottom-4 sm:right-4 sm:border-4 sm:py-3 sm:shadow-[4px_4px_0px_0px_#2A3320]">Explore map →</a></div><div className="mx-auto mt-3 flex max-w-5xl flex-wrap items-center justify-between gap-3 border-2 border-[#2A3320] bg-[#FDFBF7] px-4 py-3 text-xs font-bold uppercase tracking-wider sm:hidden"><span><i className="mr-1.5 inline-block h-3 w-3 rounded-full bg-[#B8892D]" />Open</span><span><i className="mr-1.5 inline-block h-3 w-3 rounded-full bg-[#4F5B2A]" />In progress</span><span><i className="mr-1.5 inline-block h-3 w-3 rounded-full bg-[#D8C9A8]" />Resolved</span></div></div></section>
       <section className="grid gap-12 border-b-4 border-[#2A3320] bg-[#B8892D] px-6 py-20 lg:grid-cols-2 lg:px-12 lg:py-24"><div className="mx-auto max-w-xl"><p className="eyebrow text-[#2A3320]">Why it matters</p><h2 className="section-title">Built on transparency</h2><p className="mt-6 text-lg font-medium leading-relaxed text-[#2A3320]/80">Every civic system claims accountability. NagarDrishti enforces it through architecture, not promises.</p></div><div className="mx-auto w-full max-w-xl">{[["TAMPER-EVIDENT HISTORY", "Every status change is hash-chained. Modifications are detectable."], ["PRIVACY BY DESIGN", "Locations are coarsened. No names, phone numbers, or exact coordinates are published."], ["AI ASSISTS, HUMANS DECIDE", "All suggestions are editable. No model can reject, close, or punish autonomously."], ["CITIZEN VETO POWER", "Closures require proof. Verification requires your vote. False fixes get reopened."]].map(([title, body]) => <div key={title} className="flex gap-4 border-b-2 border-[#2A3320]/30 py-4"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-[#2A3320] bg-[#D8C9A8]"><Check size={16} strokeWidth={3} /></div><div><strong className="text-sm font-black uppercase tracking-wider">{title}</strong><p className="mt-1 text-sm font-medium text-[#2A3320]/70">{body}</p></div></div>)}</div></section>
       <section className="border-b-4 border-[#2A3320] px-6 py-20 lg:px-12 lg:py-28"><div className="mx-auto max-w-[1440px]"><p className="eyebrow">Get started</p><h2 className="section-title">Choose your role</h2><p className="mt-4 font-medium text-[#2A3320]/70">NagarDrishti serves different users with purpose-built experiences.</p><div className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-4">{[[Camera, "CITIZEN", "Report issues, track progress, support neighbours, and verify fixes.", "/citizen", "bg-[#4F5B2A]"], [Shield, "OFFICER", "Triage queue, assign departments, upload proof-of-fix, manage workflow.", "/officer", "bg-[#B8892D]"], [Eye, "PUBLIC", "Explore the issue map, ward scorecards, SLA breaches, and forgotten issues.", "/transparency", "bg-[#D8C9A8]"], [BarChart3, "RESEARCHER", "Inspect model predictions, audit ledger, duplicate analysis, and metrics.", "/research", "bg-[#4F5B2A]"]].map(([Icon, title, body, href, color]) => <a key={title as string} href={href as string} className="group relative border-4 border-[#2A3320] bg-white p-8 shadow-[8px_8px_0px_0px_#2A3320] transition-all duration-200 hover:-translate-y-2"><div className={`mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full border-4 border-[#2A3320] ${color} shadow-[4px_4px_0px_0px_#2A3320] transition-transform group-hover:scale-110`}><Icon className={color === "bg-[#D8C9A8]" ? "text-[#2A3320]" : "text-white"} size={32} /></div><h3 className="text-center text-xl font-black uppercase tracking-wider">{title as string}</h3><p className="mt-3 text-center text-sm font-medium leading-relaxed text-[#2A3320]/70">{body as string}</p><div className="mt-6 text-center"><span className="inline-flex border-4 border-[#2A3320] bg-[#4F5B2A] px-5 py-3 text-sm font-black uppercase tracking-wider text-white shadow-[4px_4px_0px_0px_#2A3320]">Enter dashboard →</span></div><span className="absolute right-3 top-3 h-3 w-3 rounded-full bg-[#B8892D]" /></a>)}</div></div></section>
       <section className="relative overflow-hidden border-b-4 border-[#2A3320] bg-[#D8C9A8] px-6 py-20 text-center lg:py-28"><div className="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-[#4F5B2A]/20" /><div className="absolute -bottom-10 -right-10 h-32 w-32 rotate-45 bg-[#B8892D]/20" /><div className="relative mx-auto max-w-3xl"><h2 className="section-title">Ready to make your neighbourhood visible?</h2><p className="mx-auto mt-5 max-w-xl text-lg font-medium text-[#2A3320]/70">Join the citizens who believe public issues deserve public accountability.</p><div className="mt-9 flex flex-wrap justify-center gap-4"><ButtonLink href="/citizen/report">Start reporting <ArrowRight size={18} /></ButtonLink><ButtonLink href="/transparency" inverse>Explore issues <ArrowRight size={18} /></ButtonLink></div></div></section>

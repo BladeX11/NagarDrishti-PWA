@@ -2,9 +2,10 @@ import { Router } from 'express';
 import { auditService } from '../services/auditService.js';
 import { db } from '../db/index.js';
 import { issues } from '../db/schema.js';
-import { eq, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 const router = Router();
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * GET /api/audit/verify/:issueId
@@ -13,13 +14,16 @@ const router = Router();
  */
 router.get('/verify/:issueId', async (req, res) => {
   try {
-    const { issueId } = req.params;
+    const issueId = String(req.params.issueId ?? '').trim();
 
-    // Resolve public ref (e.g. ND-104) to UUID if needed
-    const [found] = await db
-      .select({ id: issues.id, publicRef: issues.publicRef })
-      .from(issues)
-      .where(or(eq(issues.id, issueId), eq(issues.publicRef, issueId)));
+    // Resolve public ref (e.g. ND-104) to UUID safely without casting non-UUIDs as uuid
+    const [found] = issueId
+      ? await db
+          .select({ id: issues.id, publicRef: issues.publicRef })
+          .from(issues)
+          .where(UUID_RE.test(issueId) ? eq(issues.id, issueId) : eq(issues.publicRef, issueId))
+          .limit(1)
+      : [];
 
     if (!found) {
       return res.status(404).json({ success: false, error: 'Issue not found' });

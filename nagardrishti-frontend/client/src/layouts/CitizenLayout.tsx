@@ -1,6 +1,9 @@
-import { Bell, Camera, Compass, Home, ListChecks, MoreHorizontal, Plus, Settings, ChevronRight, X } from 'lucide-react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { Bell, Camera, Compass, Home, ListChecks, LogOut, MoreHorizontal, Plus, Settings, ChevronRight, X } from 'lucide-react';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { authApi, clearRole } from '../lib/api';
+import { formatWardLabel } from '../pages/citizen/constants';
 import { InstallPrompt } from '../components/shared/InstallPrompt';
 import { PushOptIn } from '../components/shared/PushOptIn';
 
@@ -25,8 +28,46 @@ const HIDE_NAV_PATHS = ['/citizen/report'];
 
 export function CitizenLayout() {
   const [more, setMore] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const [profile, setProfile] = useState<{ id: string; role: string; name: string; ward?: string } | null>(null);
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const hideNav = HIDE_NAV_PATHS.some(p => pathname.startsWith(p));
+
+  useEffect(() => {
+    let active = true;
+    authApi
+      .me()
+      .then(user => {
+        if (active) setProfile(user);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handlePortalSwitch = async (targetPath: string, isLogout = false) => {
+    if (switching) return;
+    setSwitching(true);
+    setMore(false);
+    try {
+      await authApi.logout();
+    } catch {
+      clearRole();
+    } finally {
+      clearRole();
+      setSwitching(false);
+      if (isLogout) toast.success('Signed out.');
+      navigate(targetPath);
+    }
+  };
+
+  const wardLabel = profile?.ward ? formatWardLabel(profile.ward) : '';
+  const desktopContext = [profile?.name, wardLabel ? `Pune · ${wardLabel}` : 'Pune']
+    .filter(Boolean)
+    .join(' · ');
+  const mobileBadge = wardLabel || profile?.name || 'Citizen';
 
   return (
     <div className="min-h-dvh bg-[#F5EFE3] text-[#2A3320]">
@@ -45,7 +86,30 @@ export function CitizenLayout() {
         </nav>
         <div className="space-y-2 border-t-2 border-white/20 p-4">
           <Link to="/" className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-white/80 hover:text-white">← Back to home</Link>
-          <Link to="/officer" className="flex items-center justify-between bg-[#3A4420] px-3 py-3 text-[10px] font-black uppercase tracking-wider">Switch role: Officer <ChevronRight size={14}/></Link>
+          <button
+            type="button"
+            disabled={switching}
+            onClick={() => void handlePortalSwitch('/officer')}
+            className="flex w-full items-center justify-between bg-[#3A4420] px-3 py-3 text-left text-[10px] font-black uppercase tracking-wider hover:bg-[#2A3320] disabled:opacity-60"
+          >
+            Switch role: Officer <ChevronRight size={14}/>
+          </button>
+          <button
+            type="button"
+            disabled={switching}
+            onClick={() => void handlePortalSwitch('/research')}
+            className="flex w-full items-center justify-between bg-[#3A4420] px-3 py-3 text-left text-[10px] font-black uppercase tracking-wider hover:bg-[#2A3320] disabled:opacity-60"
+          >
+            Switch role: Research <ChevronRight size={14}/>
+          </button>
+          <button
+            type="button"
+            disabled={switching}
+            onClick={() => void handlePortalSwitch('/', true)}
+            className="flex w-full items-center justify-between border border-white/25 px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider text-white/85 hover:bg-[#2A3320] disabled:opacity-60"
+          >
+            Log out <LogOut size={13}/>
+          </button>
         </div>
       </aside>
 
@@ -59,11 +123,11 @@ export function CitizenLayout() {
               <span className="display-title text-sm">NagarDrishti</span>
             </Link>
             <p className="hidden text-xs font-bold uppercase tracking-widest text-[#2A3320]/50 lg:block">
-              Pune · Ward 12 <span className="mx-2">/</span> Citizen space
+              {desktopContext} <span className="mx-2">/</span> Citizen space
             </p>
             <div className="ml-auto flex items-center gap-2">
               <span className="border-2 border-[#2A3320] bg-[#D8C9A8] px-2.5 py-1 text-xs font-bold lg:hidden">
-                Ward 12
+                {mobileBadge}
               </span>
               <Link
                 aria-label="Notifications"
@@ -194,7 +258,30 @@ export function CitizenLayout() {
               <Link to="/citizen/notifications" onClick={() => setMore(false)} className="flex min-h-[46px] items-center justify-between border-2 border-[#2A3320] bg-white px-4 text-xs font-black uppercase tracking-wider">Notifications <ChevronRight size={16}/></Link>
               <Link to="/citizen/settings" onClick={() => setMore(false)} className="flex min-h-[46px] items-center justify-between border-2 border-[#2A3320] bg-white px-4 text-xs font-black uppercase tracking-wider">Settings <ChevronRight size={16}/></Link>
               <Link to="/transparency" onClick={() => setMore(false)} className="flex min-h-[46px] items-center justify-between border-2 border-[#2A3320] bg-[#D8C9A8] px-4 text-xs font-black uppercase tracking-wider">Public transparency map <ChevronRight size={16}/></Link>
-              <Link to="/officer" onClick={() => setMore(false)} className="flex min-h-[46px] items-center justify-between border-2 border-[#2A3320] bg-[#4F5B2A] px-4 text-xs font-black uppercase tracking-wider text-white">Switch role: Officer <ChevronRight size={16}/></Link>
+              <button
+                type="button"
+                disabled={switching}
+                onClick={() => void handlePortalSwitch('/officer')}
+                className="flex min-h-[46px] w-full items-center justify-between border-2 border-[#2A3320] bg-[#4F5B2A] px-4 text-left text-xs font-black uppercase tracking-wider text-white disabled:opacity-60"
+              >
+                Switch role: Officer <ChevronRight size={16}/>
+              </button>
+              <button
+                type="button"
+                disabled={switching}
+                onClick={() => void handlePortalSwitch('/research')}
+                className="flex min-h-[46px] w-full items-center justify-between border-2 border-[#2A3320] bg-[#2A3320] px-4 text-left text-xs font-black uppercase tracking-wider text-white disabled:opacity-60"
+              >
+                Switch role: Research <ChevronRight size={16}/>
+              </button>
+              <button
+                type="button"
+                disabled={switching}
+                onClick={() => void handlePortalSwitch('/', true)}
+                className="flex min-h-[44px] w-full items-center justify-center gap-2 border-2 border-red-800 bg-white px-4 text-xs font-black uppercase tracking-wider text-red-900 disabled:opacity-60"
+              >
+                <LogOut size={15}/> Log out
+              </button>
               <Link to="/" onClick={() => setMore(false)} className="flex min-h-[44px] items-center justify-center text-xs font-bold uppercase tracking-wider text-[#2A3320]/70 underline">← Back to home</Link>
             </div>
           </div>

@@ -6,7 +6,13 @@ type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Pro
 
 export function InstallPrompt() {
   const [installEvent, setInstallEvent] = useState<InstallPromptEvent | null>(null);
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem('nd-install-dismissed') === '1');
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('nd-install-dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     const handleBeforeInstall = (event: Event) => {
@@ -25,13 +31,22 @@ export function InstallPrompt() {
   if (!installEvent || dismissed) return null;
 
   const install = async () => {
-    await installEvent.prompt();
-    await installEvent.userChoice;
-    setInstallEvent(null);
+    try {
+      await installEvent.prompt();
+      await installEvent.userChoice;
+    } catch {
+      // Ignore user cancel or browser prompt error
+    } finally {
+      setInstallEvent(null);
+    }
   };
 
   const dismiss = () => {
-    localStorage.setItem('nd-install-dismissed', '1');
+    try {
+      localStorage.setItem('nd-install-dismissed', '1');
+    } catch {
+      // Ignore storage access errors
+    }
     setDismissed(true);
   };
 

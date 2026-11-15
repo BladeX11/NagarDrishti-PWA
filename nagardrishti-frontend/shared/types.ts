@@ -69,18 +69,20 @@ export const WARD_NAMES: Record<string, string> = {
 export const DEPARTMENTS = [
   "roads",
   "waste",
+  "water",
   "drainage",
   "electrical",
-  "animal-welfare",
+  "animals",
   "civic-works",
 ] as const;
 
 export const DEPARTMENT_NAMES: Record<string, string> = {
-  roads: "Roads Department",
+  roads: "Roads & Infrastructure",
   waste: "Solid Waste Management",
-  drainage: "Drainage & Water",
-  electrical: "Electrical Department",
-  "animal-welfare": "Animal Welfare",
+  water: "Water Supply",
+  drainage: "Drainage & Sewage",
+  electrical: "Electrical & Streetlights",
+  animals: "Stray Animal Control",
   "civic-works": "Civic Works",
 };
 
@@ -88,9 +90,9 @@ export const CATEGORY_DEPARTMENT: Record<Category, string> = {
   "pothole/road": "roads",
   "garbage/waste": "waste",
   "drainage/sewage": "drainage",
-  "water supply": "drainage",
+  "water supply": "water",
   "streetlight/electrical": "electrical",
-  "stray animals": "animal-welfare",
+  "stray animals": "animals",
   encroachment: "civic-works",
   other: "civic-works",
 };

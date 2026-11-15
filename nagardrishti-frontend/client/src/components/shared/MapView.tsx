@@ -34,8 +34,38 @@ export const WARD_CENTROIDS: Record<string, [number, number]> = {
   'ward-15': [18.5529, 73.9053], // Kalyani Nagar
 };
 
-export function MapView({ issues, selectedId, onSelectIssue, height = '520px', publicView = false, pinPosition, onPinChange, neglectZoneWards = [] }: { issues: any[]; selectedId?: string; onSelectIssue?: (issue: any) => void; height?: string; publicView?: boolean; pinPosition?: [number, number]; onPinChange?: (position: [number, number]) => void; neglectZoneWards?: string[] }) {
+const formatWard = (ward?: string | null, wardId?: string | null) => {
+  if (ward && ward.trim()) return ward;
+  if (wardId && wardId.trim()) {
+    const cleaned = wardId.replace(/^ward-/i, '');
+    return /^ward\b/i.test(wardId) ? wardId : `Ward ${cleaned}`;
+  }
+  return 'Pune';
+};
+
+export function MapView({
+  issues,
+  selectedId,
+  onSelectIssue,
+  height = '520px',
+  publicView = false,
+  linkBasePath,
+  pinPosition,
+  onPinChange,
+  neglectZoneWards = [],
+}: {
+  issues: any[];
+  selectedId?: string;
+  onSelectIssue?: (issue: any) => void;
+  height?: string;
+  publicView?: boolean;
+  linkBasePath?: string;
+  pinPosition?: [number, number];
+  onPinChange?: (position: [number, number]) => void;
+  neglectZoneWards?: string[];
+}) {
   const pin = coarsen(pinPosition);
+  const resolvedLinkBase = (linkBasePath ?? (publicView ? '/transparency/issue' : '/citizen/issue')).replace(/\/$/, '');
   return (
     <div className="map-frame relative" style={{ height }}>
       <MapContainer center={[18.5204, 73.8567]} zoom={13} scrollWheelZoom className="h-full w-full">
@@ -45,17 +75,23 @@ export function MapView({ issues, selectedId, onSelectIssue, height = '520px', p
           const rawPos = getCoords(issue);
           const pos = coarsen(rawPos);
           if (!pos) return null;
-          const wardLabel = (issue as any).ward || (issue as any).wardId || 'Pune';
+          const wardLabel = formatWard(issue.ward, issue.wardId);
           const ageLabel = issue.age || 'Recent';
           let statusColor = (statusDot as Record<string, string>)[issue.status] || '#B8892D';
           let radius = issue.id === selectedId ? 12 : 8;
           let className = '';
+          const tier =
+            issue.tier != null && typeof issue.tier === 'number' && issue.tier >= 0 && issue.tier < TIER_COLORS.length
+              ? issue.tier
+              : null;
 
-          if (publicView && issue.tier !== undefined) {
-            statusColor = TIER_COLORS[issue.tier];
-            radius = [7, 8, 10, 12, 14][issue.tier];
-            if (issue.tier === 4) className = 'tier-critical';
+          if (publicView && tier !== null) {
+            statusColor = TIER_COLORS[tier];
+            radius = [7, 8, 10, 12, 14][tier] ?? 8;
+            if (tier === 4) className = 'tier-critical';
           }
+
+          const issueRef = issue.publicRef || issue.id;
 
           return (
             <CircleMarker
@@ -77,12 +113,12 @@ export function MapView({ issues, selectedId, onSelectIssue, height = '520px', p
                   <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-[#4F5B2A]">{wardLabel} · {publicView ? 'Approximate location' : ageLabel}</p>
                   <p className="text-sm font-black">{issue.title}</p>
                   <p className="mt-1 text-xs">{issue.category} · {issue.status}</p>
-                  {publicView && issue.tier !== undefined && (
-                    <p className="mt-1 text-xs font-bold" style={{ color: TIER_COLORS[issue.tier] }}>
-                      T{issue.tier}: {TIER_LABELS[issue.tier]} · {issue.inactionDays} days without action
+                  {publicView && tier !== null && (
+                    <p className="mt-1 text-xs font-bold" style={{ color: TIER_COLORS[tier] }}>
+                      T{tier}: {TIER_LABELS[tier]} · {issue.inactionDays ?? 0} days without action
                     </p>
                   )}
-                  <Link className="mt-2 inline-block text-xs font-black uppercase text-[#4F5B2A] underline" to={publicView ? `/transparency/issue/${issue.id}` : `/citizen/issue/${issue.id}`}>View detail →</Link>
+                  <Link className="mt-2 inline-block text-xs font-black uppercase text-[#4F5B2A] underline" to={`${resolvedLinkBase}/${issueRef}`}>View detail →</Link>
                 </div>
               </Popup>
             </CircleMarker>

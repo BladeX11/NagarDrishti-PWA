@@ -28,13 +28,58 @@ import {
   queueSubmission,
   saveReportDraft,
 } from "../../pwa/offlineQueue";
-import { categoryDepartmentFor, categoryNames } from "./constants";
+import {
+  categoryDepartmentFor,
+  categoryNames,
+  deriveWardFromCoords,
+  formatWardLabel,
+  normalizeWardKey,
+} from "./constants";
+
+const OPEN_DUPLICATE_STATUSES = new Set([
+  "Open",
+  "Triaged",
+  "Assigned",
+  "In Progress",
+  "Reopened",
+]);
+
+function distanceMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const EMPTY_SUGGESTION = {
+  category: "pothole/road" as Category,
+  reason: "",
+  source: null as "gemini" | "local-ml" | "rules" | null,
+  modelVersion: "",
+  loading: false,
+};
 
 export function ReportFlow() {
   const [step, setStep] = useState(0);
   const [category, setCategory] = useState<Category>("pothole/road");
   const [description, setDescription] = useState("");
-  const [language, setLanguage] = useState("English");
+  const [language, setLanguage] = useState(() => {
+    try {
+      const saved = localStorage.getItem("nd-language");
+      if (saved && ["English", "हिन्दी", "मराठी"].includes(saved)) return saved;
+    } catch {
+      // Ignore storage read errors.
+    }
+    return "English";
+  });
   const [photo, setPhoto] = useState("");
   const [location, setLocation] = useState<[number, number]>([
     18.5204, 73.8567,
@@ -45,22 +90,31 @@ export function ReportFlow() {
     "synced" | "queued" | null
   >(null);
   const [selectedDuplicate, setSelectedDuplicate] = useState(false);
+  const [supportingDupId, setSupportingDupId] = useState<string | null>(null);
+  const [supportedDupIds, setSupportedDupIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState<{
-    category: Category;
-    reason: string;
-    source: "gemini" | "local-ml" | "rules" | null;
-    modelVersion: string;
-    loading: boolean;
-  }>({
-    category: "pothole/road",
-    reason: "",
-    source: null,
-    modelVersion: "",
-    loading: false,
-  });
+  const [aiSuggestion, setAiSuggestion] = useState(EMPTY_SUGGESTION);
   const [apiDuplicates, setApiDuplicates] = useState<ApiIssue[]>([]);
+  const [nearbyIssues, setNearbyIssues] = useState<any[]>(
+    seedIssues.slice(0, 7)
+  );
+  const [isLiveMap, setIsLiveMap] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    issuesApi
+      .list({ limit: 25 })
+      .then(res => {
+        if (!active) return;
+        setNearbyIssues(res.items);
+        setIsLiveMap(true);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     loadReportDraft()
@@ -70,7 +124,7 @@ export function ReportFlow() {
         if (categories.includes(draft.category as Category))
           setCategory(draft.category as Category);
         setDescription(draft.description);
-        setLanguage(draft.language);
+        if (draft.language) setLanguage(draft.language);
         setPhoto(draft.photoDataUrl);
         setLocation([draft.latitude, draft.longitude]);
       })
@@ -100,9 +154,13 @@ export function ReportFlow() {
   ]);
 
   async function runClassify(text: string, languageName: string) {
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      setAiSuggestion(EMPTY_SUGGESTION);
+      return;
+    }
     setAiSuggestion(s => ({ ...s, reason: "", source: null, loading: true }));
     try {
+      const apiBase = import.meta.env.VITE_API_BASE_URL ?? "/api";
       const classifyHeaders: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -110,7 +168,7 @@ export function ReportFlow() {
         classifyHeaders["x-demo-role"] =
           localStorage.getItem("nd-role") || "citizen";
       }
-      const res = await fetch("/api/ai/classify", {
+      const res = await fetch(`${apiBase}/ai/classify`, {
         method: "POST",
         headers: classifyHeaders,
         credentials: "include",
@@ -122,7 +180,7 @@ export function ReportFlow() {
         }),
       });
       const json = await res.json();
-      if (json.success && json.data) {
+      if (res.ok && json.success && json.data) {
         setAiSuggestion({
           category: json.data.category as Category,
           reason: json.data.reason,
@@ -133,7 +191,9 @@ export function ReportFlow() {
       } else {
         setAiSuggestion(s => ({
           ...s,
+          source: null,
           reason:
+            json?.error ||
             "Category suggestion is unavailable. Keep or choose a category manually.",
           loading: false,
         }));
@@ -141,6 +201,7 @@ export function ReportFlow() {
     } catch {
       setAiSuggestion(s => ({
         ...s,
+        source: null,
         reason:
           "Category suggestion is unavailable. Keep or choose a category manually.",
         loading: false,
@@ -156,9 +217,18 @@ export function ReportFlow() {
     return new Promise(resolve => {
       const reader = new FileReader();
       reader.onload = e => {
+        const result = e.target?.result;
+        if (typeof result !== "string" || !result) {
+          resolve("");
+          return;
+        }
         const img = new Image();
         img.onload = () => {
           let { width, height } = img;
+          if (!width || !height) {
+            resolve("");
+            return;
+          }
           if (width > maxDimension || height > maxDimension) {
             if (width > height) {
               height = Math.round((height * maxDimension) / width);
@@ -172,15 +242,15 @@ export function ReportFlow() {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL("image/jpeg", quality));
-          } else {
-            resolve(String(e.target?.result));
+          if (!ctx) {
+            resolve("");
+            return;
           }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
         };
-        img.onerror = () => resolve(String(e.target?.result));
-        img.src = String(e.target?.result);
+        img.onerror = () => resolve("");
+        img.src = result;
       };
       reader.onerror = () => resolve("");
       reader.readAsDataURL(file);
@@ -193,19 +263,86 @@ export function ReportFlow() {
     const dataUrl = await compressImage(file);
     if (dataUrl) {
       setPhoto(dataUrl);
+    } else {
+      event.target.value = "";
+      toast.error(
+        "Could not process this image file. Please select a valid photo."
+      );
     }
   };
+
   const go = (next: number) => setStep(Math.max(0, Math.min(2, next)));
+  const derivedWard = deriveWardFromCoords(location[0], location[1]);
+  const coarsenedLat = Math.round(location[0] * 200) / 200;
+  const coarsenedLng = Math.round(location[1] * 200) / 200;
+
   const handleNext = async () => {
-    if (step === 0 && description.trim()) void runClassify(description, language);
+    if (step === 0) {
+      if (description.trim()) {
+        void runClassify(description, language);
+      } else {
+        setAiSuggestion(EMPTY_SUGGESTION);
+      }
+    }
     if (step === 1) {
       setSelectedDuplicate(false);
+      setSupportedDupIds([]);
+      setApiDuplicates([]);
+      const targetWardKey = normalizeWardKey(derivedWard);
       issuesApi
-        .list({ category, limit: 5 })
-        .then(r => setApiDuplicates(r.items.slice(0, 4)))
-        .catch(() => {});
+        .list({ category, limit: 25 })
+        .then(r => {
+          const candidates = r.items
+            .filter(item => OPEN_DUPLICATE_STATUSES.has(item.status))
+            .map(item => {
+              const hasCoords =
+                typeof item.latitude === "number" &&
+                typeof item.longitude === "number";
+              const dist = hasCoords
+                ? distanceMeters(
+                    location[0],
+                    location[1],
+                    item.latitude!,
+                    item.longitude!
+                  )
+                : Number.POSITIVE_INFINITY;
+              const sameWard =
+                normalizeWardKey(item.ward || item.wardId) === targetWardKey;
+              return { item, dist, hasCoords, sameWard };
+            })
+            .filter(({ dist, hasCoords, sameWard }) =>
+              hasCoords ? dist <= 1500 : sameWard
+            )
+            .sort((a, b) => a.dist - b.dist)
+            .slice(0, 4)
+            .map(({ item }) => item);
+          setApiDuplicates(candidates);
+        })
+        .catch(() => setApiDuplicates([]));
     }
     go(step + 1);
+  };
+
+  const handleSupportDuplicate = async (issue: ApiIssue) => {
+    if (supportingDupId || supportedDupIds.includes(issue.id)) return;
+    setSupportingDupId(issue.id);
+    try {
+      await issuesApi.support(issue.id);
+      setSupportedDupIds(prev => [...prev, issue.id]);
+      setSelectedDuplicate(true);
+      toast.success("Support added to the existing report.");
+    } catch (err: any) {
+      const msg = err?.message || "Could not add support right now.";
+      if (msg.toLowerCase().includes("already supporting")) {
+        setSupportedDupIds(prev => [...prev, issue.id]);
+        setSelectedDuplicate(true);
+        toast.info("You are already supporting this report.");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setSupportingDupId(null);
+    }
   };
 
   if (submitted)
@@ -358,7 +495,13 @@ export function ReportFlow() {
                 rows={3}
                 maxLength={500}
                 value={description}
-                onChange={e => setDescription(e.target.value)}
+                onChange={e => {
+                  const next = e.target.value;
+                  setDescription(next);
+                  if (!next.trim()) {
+                    setAiSuggestion(EMPTY_SUGGESTION);
+                  }
+                }}
                 placeholder="Share helpful context: what happened, when it started, or how it affects the area…"
                 className="input-block min-h-28 resize-y text-sm sm:min-h-36"
               />
@@ -398,7 +541,7 @@ export function ReportFlow() {
                 </span>
               </div>
               <MapView
-                issues={seedIssues.slice(0, 7)}
+                issues={nearbyIssues}
                 height="220px"
                 pinPosition={location}
                 onPinChange={setLocation}
@@ -471,6 +614,7 @@ export function ReportFlow() {
 
             {(aiSuggestion.loading ||
               aiSuggestion.source ||
+              aiSuggestion.reason ||
               description.trim()) && (
               <div className="border-2 border-[#B8892D] bg-[#D8C9A8]/25 p-3.5 sm:p-4">
                 <div className="flex items-center justify-between gap-2">
@@ -494,7 +638,7 @@ export function ReportFlow() {
                       </button>
                     )}
                 </div>
-                {aiSuggestion.source && (
+                {aiSuggestion.source ? (
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-black">
@@ -515,6 +659,13 @@ export function ReportFlow() {
                       </button>
                     )}
                   </div>
+                ) : (
+                  !aiSuggestion.loading &&
+                  aiSuggestion.reason && (
+                    <p className="mt-2 text-xs text-[#2A3320]/70">
+                      {aiSuggestion.reason}
+                    </p>
+                  )
                 )}
               </div>
             )}
@@ -531,31 +682,35 @@ export function ReportFlow() {
                   continue below to submit yours.
                 </p>
                 <div className="space-y-2.5">
-                  {apiDuplicates.map((issue: ApiIssue) => (
-                    <div
-                      key={issue.id}
-                      className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3"
-                    >
-                      <p className="text-sm font-black">{issue.title}</p>
-                      <p className="mt-1 text-xs font-bold text-[#2A3320]/65">
-                        {issue.category} · {issue.wardId || "Ward ?"} ·{" "}
-                        {issue.status}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedDuplicate(true);
-                          toast.success(
-                            "Support added to the existing report."
-                          );
-                          issuesApi.support(issue.id).catch(() => {});
-                        }}
-                        className="mt-2.5 inline-flex min-h-[40px] items-center border-2 border-[#2A3320] bg-[#B8892D] px-3 text-xs font-black uppercase tracking-wider text-[#2A3320]"
+                  {apiDuplicates.map((issue: ApiIssue) => {
+                    const isSupported = supportedDupIds.includes(issue.id);
+                    const isBusy = supportingDupId === issue.id;
+                    return (
+                      <div
+                        key={issue.id}
+                        className="border-2 border-[#2A3320] bg-[#FDFBF7] p-3"
                       >
-                        ＋ Support this instead
-                      </button>
-                    </div>
-                  ))}
+                        <p className="text-sm font-black">{issue.title}</p>
+                        <p className="mt-1 text-xs font-bold text-[#2A3320]/65">
+                          {issue.category} ·{" "}
+                          {formatWardLabel(issue.ward, issue.wardId, "Pune")} ·{" "}
+                          {issue.status}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={isBusy || isSupported}
+                          onClick={() => void handleSupportDuplicate(issue)}
+                          className="mt-2.5 inline-flex min-h-[40px] items-center border-2 border-[#2A3320] bg-[#B8892D] px-3 text-xs font-black uppercase tracking-wider text-[#2A3320] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isBusy
+                            ? "Supporting..."
+                            : isSupported
+                              ? "Supported"
+                              : "＋ Support this instead"}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
                 {selectedDuplicate && (
                   <p className="mt-2.5 text-xs font-bold text-[#4F5B2A]">
@@ -585,7 +740,8 @@ export function ReportFlow() {
                 <div>
                   <p className="eyebrow">Approximate location</p>
                   <p className="mt-1 font-bold">
-                    Ward 12, Pune · Coarsened public pin
+                    {derivedWard}, Pune · Coarsened pin (
+                    {coarsenedLat.toFixed(3)}, {coarsenedLng.toFixed(3)})
                   </p>
                 </div>
                 <div>
@@ -639,7 +795,7 @@ export function ReportFlow() {
                     ? "mr"
                     : "en";
               const payload = {
-                title: `${categoryNames[category]} reported in Pune`,
+                title: `${categoryNames[category]} reported in ${derivedWard}`,
                 description:
                   description ||
                   `A ${categoryNames[category].toLowerCase()} issue.`,
@@ -697,9 +853,11 @@ export function ReportFlow() {
           </Button>
         )}
       </div>
-      <div className="pb-6">
-        <DemoNote />
-      </div>
+      {!isLiveMap && (
+        <div className="pb-6">
+          <DemoNote />
+        </div>
+      )}
     </div>
   );
 }

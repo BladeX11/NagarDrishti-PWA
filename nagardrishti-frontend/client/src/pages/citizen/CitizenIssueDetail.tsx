@@ -3,34 +3,49 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, Camera, FileCheck2, ThumbsUp } from "lucide-react";
 import { issues as seedIssues, statusEvents } from "../../data/seed";
-import { issuesApi } from "../../lib/api";
+import { issuesApi, type ApiIssue } from "../../lib/api";
 import { ActivityTimeline } from "../../components/shared/ActivityTimeline";
 import { Button } from "../../components/shared/Button";
 import { MapView } from "../../components/shared/MapView";
 import { CategoryIcon, DemoNote, Panel } from "../../components/shared/Primitives";
 import { StatusBadge } from "../../components/shared/StatusBadge";
-import { getSubmittedReports } from "./constants";
+import {
+  formatWardLabel,
+  getSafeMediaUrl,
+  getSubmittedReports,
+} from "./constants";
 
 export function CitizenIssueDetail() {
   const { id = "ND-104" } = useParams();
   const matchedSeed =
     seedIssues.find(item => item.id === id) ||
     getSubmittedReports().find(item => item.id === id);
-  const [apiIssue, setApiIssue] = useState<any>();
-  const [loading, setLoading] = useState(!matchedSeed);
+  const [apiIssue, setApiIssue] = useState<ApiIssue | null>(null);
+  const [loading, setLoading] = useState(true);
   const [supported, setSupported] = useState(false);
+  const [supporting, setSupporting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
+    let active = true;
+    setApiIssue(null);
+    setSupported(false);
+    setSupporting(false);
+    setLoading(true);
     issuesApi
       .get(id)
-      .then((r: any) => {
-        if (r) setApiIssue(r);
+      .then(r => {
+        if (active && r) setApiIssue(r);
       })
       .catch(err => {
         console.error("Failed to fetch issue:", err);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   const issue: any = apiIssue || matchedSeed;
@@ -58,20 +73,74 @@ export function CitizenIssueDetail() {
       </div>
     );
 
-  const events =
+  const rawEvents =
     apiIssue?.events && apiIssue.events.length > 0
       ? apiIssue.events
       : statusEvents.filter(
           (event: any) =>
             event.issueId === issue.id || event.issueId === issue.publicRef
         );
-  const beforeMedia = apiIssue?.media?.find((m: any) => m.type === "before");
+  const events = rawEvents.map((e: any) => ({
+    ...e,
+    timestamp: e.timestamp || e.createdAt || new Date().toISOString(),
+    actor:
+      e.actor ||
+      (e.actorRole === "system"
+        ? "System"
+        : e.actorRole === "officer"
+          ? "Officer"
+          : "Citizen"),
+  }));
+
+  const beforeMedia = apiIssue?.media?.find(m => m.type === "before");
   const afterMedia = apiIssue?.media?.find(
-    (m: any) => m.type === "proof" || m.type === "after"
+    m => m.type === "proof" || m.type === "after"
   );
+  const beforeUrl = getSafeMediaUrl(beforeMedia);
+  const afterUrl = getSafeMediaUrl(afterMedia);
+  const hasProof =
+    issue.proofState === "submitted" ||
+    issue.proofState === "accepted" ||
+    Boolean(issue.proofSubmitted) ||
+    Boolean(afterMedia);
   const votes = issue.verificationVotes ?? { fixed: 0, notFixed: 0, unsure: 0 };
-  const supportersCount =
-    (apiIssue?.supporterCount ?? issue.supporters ?? 0) + (supported ? 1 : 0);
+  const supportersCount = apiIssue?.supporterCount ?? issue.supporters ?? 0;
+  const wardLabel = formatWardLabel(issue.ward, issue.wardId);
+
+  const handleSupport = async () => {
+    if (supporting || supported) return;
+    setSupporting(true);
+    try {
+      const updated = await issuesApi.support(issue.id);
+      setSupported(true);
+      if (apiIssue) {
+        const nextCount =
+          typeof updated?.supporterCount === "number"
+            ? updated.supporterCount
+            : (apiIssue.supporterCount ?? 0) + 1;
+        setApiIssue(prev =>
+          prev
+            ? {
+                ...prev,
+                supporterCount: nextCount,
+                supporters: nextCount,
+              }
+            : prev
+        );
+      }
+      toast.success("Thanks for supporting this issue.");
+    } catch (err: any) {
+      const msg = err?.message || "Could not record support right now.";
+      if (msg.toLowerCase().includes("already supporting")) {
+        setSupported(true);
+        toast.info("You are already supporting this issue.");
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setSupporting(false);
+    }
+  };
 
   return (
     <div>
@@ -96,8 +165,7 @@ export function CitizenIssueDetail() {
         <p className="mt-3 text-xs font-medium text-[#2A3320]/65">
           Issue {issue.publicRef || issue.id} · Registered{" "}
           {issue.age || "Recently"} · Updated{" "}
-          {issue.updatedAge || issue.age || "Recently"} ·{" "}
-          {issue.wardId || issue.ward || "Ward 12"}{" "}
+          {issue.updatedAge || issue.age || "Recently"} · {wardLabel}{" "}
           <span className="mx-1">·</span>
           {supportersCount} supporters
         </p>
@@ -123,9 +191,9 @@ export function CitizenIssueDetail() {
             <p className="eyebrow mb-3">Report media</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="overflow-hidden border-2 border-[#2A3320] bg-[#D8C9A8] md:border-4">
-                {beforeMedia?.publicPath || beforeMedia?.privatePath ? (
+                {beforeUrl ? (
                   <img
-                    src={beforeMedia.publicPath || beforeMedia.privatePath}
+                    src={beforeUrl}
                     alt="Before report"
                     className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"
                   />
@@ -138,11 +206,11 @@ export function CitizenIssueDetail() {
                   Before · Citizen photo
                 </p>
               </div>
-              {(issue.proofState === "submitted" || afterMedia) && (
+              {hasProof && (
                 <div className="overflow-hidden border-2 border-[#2A3320] bg-[#D8C9A8] md:border-4">
-                  {afterMedia?.publicPath || afterMedia?.privatePath ? (
+                  {afterUrl ? (
                     <img
-                      src={afterMedia.publicPath || afterMedia.privatePath}
+                      src={afterUrl}
                       alt="After fix"
                       className="h-40 w-full object-cover grayscale transition-all hover:grayscale-0"
                     />
@@ -194,21 +262,23 @@ export function CitizenIssueDetail() {
           </section>
           <div className="flex flex-wrap gap-3">
             <Button
-              onClick={() => {
-                setSupported(true);
-                toast.success("Thanks for supporting this issue.");
-              }}
+              disabled={supporting || supported}
+              onClick={() => void handleSupport()}
               variant={supported ? "sand" : "olive"}
               className="min-h-[44px]"
             >
               <ThumbsUp size={15} />
-              {supported ? "Supported" : "Support issue"}
+              {supporting
+                ? "Supporting..."
+                : supported
+                  ? "Supported"
+                  : "Support issue"}
             </Button>
             <Button
               variant="ghost"
               className="min-h-[44px]"
               onClick={() =>
-                toast.info("Abuse report saved to the demo moderation queue.")
+                toast.info("Moderation note recorded for this session.")
               }
             >
               ⚑ Report abuse
@@ -216,7 +286,7 @@ export function CitizenIssueDetail() {
           </div>
         </div>
       </div>
-      <DemoNote>Demo data · Synthetic records</DemoNote>
+      {!apiIssue && <DemoNote>Demo data · Synthetic records</DemoNote>}
     </div>
   );
 }

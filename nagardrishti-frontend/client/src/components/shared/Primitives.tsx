@@ -14,8 +14,8 @@ export const categoryIcons: Record<Category, LucideIcon> = {
   other: HelpCircle,
 };
 
-export function CategoryIcon({ category, size = 18 }: { category: Category; size?: number }) {
-  const Icon = categoryIcons[category];
+export function CategoryIcon({ category, size = 18 }: { category: Category | string; size?: number }) {
+  const Icon = categoryIcons[category as Category] ?? categoryIcons.other;
   return <Icon size={size} strokeWidth={2.2} aria-hidden="true" />;
 }
 
